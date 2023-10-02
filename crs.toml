@@ -1,0 +1,7 @@
+#:schema ./schema/projjson.schema.json
+
+type = 'ProjectedCRS'
+name = 'WGS 84 / UTM zone 31N'
+# [base_crs]
+base_crs.name = 'WGS 84'
+

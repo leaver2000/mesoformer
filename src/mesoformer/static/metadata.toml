@@ -1,0 +1,269 @@
+#:schema ./metadata2.schema.json
+
+title = ''
+description = ""
+
+# =============================================================================
+# - boilerplate dataset metadata
+# =============================================================================
+# [[datasets]]
+# title = ""
+# institution = ""
+# source = ""
+# history = ""
+# comment = ""
+
+# [[datasets.coordinates]]
+# short_name = ""
+# long_name = ""
+# standard_name = ""
+# units = ""
+
+# [[datasets.variables]]
+
+# short_name = "a"
+# long_name = ""
+# standard_name = "a"
+# type_of_level = ""
+# level = 0
+# coordinates = []
+# description = ""
+# units = ""
+
+# [datasets.crs]
+# geographic_crs_name = ""
+# projected_crs_name = ""
+# grid_mapping_name = ""
+# semi_major_axis = 0.0
+# semi_minor_axis = 0.0
+# inverse_flattening = 0.0
+# reference_ellipsoid_name = ""
+# longitude_of_prime_meridian = 0.0
+# prime_meridian_name = ""
+# horizontal_datum_name = ""
+# latitude_of_projection_origin = 0.0
+# longitude_of_projection_origin = 0.0
+# standard_parallel = 0.0
+# false_easting = 0.0
+# false_northing = 0.0
+# units = ""
+# =============================================================================
+# - Unrestricted Mesoscale Analysis (URMA) 2.5km CONUS
+# =============================================================================
+[[datasets]]
+title = "URMA 2.5km CONUS"
+institution = "NOAA/NWS/NCEP/EMC"
+source = "Unrestricted Mesoscale Analysis (URMA) 2.5km CONUS"
+history = "..."
+comment = "Unrestricted Mesoscale Analysis (URMA) 2.5km CONUS"
+
+[[datasets.coordinates]]
+short_name = "lat"
+long_name = "latitude"
+standard_name = "latitude"
+units = "degrees_north"
+
+[[datasets.coordinates]]
+short_name = "lon"
+long_name = "longitude"
+standard_name = "longitude"
+units = "degrees_east"
+
+[[datasets.coordinates]]
+short_name = "time"
+long_name = "initial time of forecast"
+standard_name = "time"
+units = "hours since 1900-01-01 00:00:00.0"
+
+[[datasets.variables]]
+short_name = "ceil"
+long_name = "cloud ceiling"
+standard_name = "ceiling"
+type_of_level = "cloudCeiling"
+level = 0
+coordinates = ["latitude", "longitude", "time"]
+description = ""
+units = "m"
+
+[[datasets.variables]]
+short_name = "d2m"
+long_name = "2 meter dewpoint temperature"
+standard_name = "dewpoint_temperature_2m"
+level = 2
+type_of_level = "heightAboveGround"
+coordinates = ["latitude", "longitude", "time"]
+description = ""
+units = "K"
+
+[[datasets.variables]]
+short_name = "sh2"
+long_name = "2 meter specific humidity"
+standard_name = "specific_humidity_2m"
+level = 2
+type_of_level = "heightAboveGround"
+coordinates = ["latitude", "longitude", "time"]
+description = ""
+units = "kg kg**-1"
+
+[[datasets.variables]]
+short_name = "sp"
+long_name = "surface pressure"
+standard_name = "surface_pressure"
+type_of_level = "surface"
+level = 0
+coordinates = ["latitude", "longitude", "time"]
+description = ""
+units = "Pa"
+
+[[datasets.variables]]
+short_name = "t2m"
+long_name = "2 meter temperature"
+standard_name = "temperature_2m"
+level = 2
+type_of_level = "heightAboveGround"
+units = "K"
+description = ""
+coordinates = ["latitude", "longitude", "time"]
+
+[[datasets.variables]]
+short_name = "tcc"
+long_name = "total cloud cover"
+standard_name = "total_cloud_cover"
+level = 0
+type_of_level = "atmosphereSingleLayer"
+units = "%"
+coordinates = ["latitude", "longitude", "time"]
+description = ""
+
+[[datasets.variables]]
+short_name = "u10"
+long_name = "10 meter u wind component"
+standard_name = "u_wind_component_10m"
+type_of_level = "heightAboveGround"
+level = 10
+units = "m s**-1"
+coordinates = ["latitude", "longitude", "time"]
+description = ""
+
+[[datasets.variables]]
+short_name = "v10"
+long_name = "10 meter v wind component"
+standard_name = "v_wind_component_10m"
+type_of_level = "heightAboveGround"
+level = 10
+units = "m s**-1"
+coordinates = ["latitude", "longitude", "time"]
+description = ""
+
+[[datasets.variables]]
+short_name = "vis"
+long_name = "visibility"
+standard_name = "visibility"
+type_of_level = "surface"
+level = 0
+units = "m"
+coordinates = ["latitude", "longitude", "time"]
+description = ""
+
+[[datasets.variables]]
+long_name = "10 meter wind direction"
+short_name = "wdir10"
+type_of_level = "heightAboveGround"
+level = 10
+units = "Degree true"
+standard_name = "wind_direction_10m"
+coordinates = ["latitude", "longitude", "time"]
+description = ""
+
+[[datasets.variables]]
+short_name = "si10"
+long_name = "10 meter wind speed"
+standard_name = "wind_speed_10m"
+type_of_level = "heightAboveGround"
+level = 10
+units = "m s**-1"
+coordinates = ["latitude", "longitude", "time"]
+description = ""
+
+[[datasets.variables]]
+short_name = "gust"
+long_name = "wind speed gust"
+standard_name = "wind_speed_gust"
+type_of_level = "heightAboveGround"
+level = 0
+units = "m s**-1"
+coordinates = ["latitude", "longitude", "time"]
+description = ""
+
+[[datasets.variables]]
+short_name = "orog"
+long_name = "surface orography"
+standard_name = "orography"
+type_of_level = "surface"
+level = 0
+units = "m"
+coordinates = ["latitude", "longitude"]
+description = ""
+
+[datasets.crs]
+geographic_crs_name = "NDFD CONUS 2.5km Lambert Conformal Conic"
+projected_crs_name = "NDFD"
+grid_mapping_name = "lambert_conformal_conic"
+semi_major_axis = 6378137.0
+semi_minor_axis = 6356752.31424518
+inverse_flattening = 298.25722356301
+reference_ellipsoid_name = "WGS 84"
+longitude_of_prime_meridian = 0.0
+prime_meridian_name = "Greenwich"
+horizontal_datum_name = "WGS84"
+latitude_of_projection_origin = 20.191999
+longitude_of_projection_origin = 238.445999
+standard_parallel = 25
+false_easting = 0.0
+false_northing = 0.0
+units = "m"
+
+# =============================================================================
+# - ECMWF ERA5 0.25 degree
+# =============================================================================
+[[datasets]]
+title = "ECMWF ERA5 0.25 degree"
+institution = "ECMWF"
+source = ""
+history = ""
+comment = ""
+
+[[datasets.coordinates]]
+short_name = ""
+long_name = ""
+standard_name = ""
+units = ""
+
+
+[[datasets.variables]]
+short_name = "a"
+long_name = ""
+standard_name = "a"
+type_of_level = ""
+level = 0
+coordinates = []
+description = ""
+units = ""
+
+[datasets.crs]
+geographic_crs_name = ""
+projected_crs_name = ""
+grid_mapping_name = ""
+semi_major_axis = 0.0
+semi_minor_axis = 0.0
+inverse_flattening = 0.0
+reference_ellipsoid_name = ""
+longitude_of_prime_meridian = 0.0
+prime_meridian_name = ""
+horizontal_datum_name = ""
+latitude_of_projection_origin = 0.0
+longitude_of_projection_origin = 0.0
+standard_parallel = 0.0
+false_easting = 0.0
+false_northing = 0.0
+units = ""

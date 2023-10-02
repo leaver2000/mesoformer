@@ -1,0 +1,329 @@
+{
+  "definitions": {},
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://example.com/object1695473525.json",
+  "title": "Root",
+  "type": "object",
+  "required": ["title", "description", "datasets"],
+  "properties": {
+    "title": {
+      "$id": "#root/name",
+      "title": "title",
+      "type": "string",
+      "default": "",
+      "examples": ["mesoformer"],
+      "pattern": "^.*$"
+    },
+    "description": {
+      "$id": "#root/description",
+      "title": "Description",
+      "type": "string",
+      "default": "",
+      "examples": ["mesoformer"],
+      "pattern": "^.*$"
+    },
+    "datasets": {
+      "$id": "#root/datasets",
+      "title": "Datasets",
+      "type": "array",
+      "default": [],
+      "items": {
+        "$id": "#root/datasets/items",
+        "title": "Items",
+        "type": "object",
+        "required": [
+          "title",
+          "description",
+          "source",
+          "module",
+          "start_date",
+          "end_date",
+          "references",
+          "channels",
+          "crs"
+        ],
+        "properties": {
+          "title": {
+            "$id": "#root/datasets/items/name",
+            "title": "title",
+            "type": "string",
+            "default": "",
+            "examples": ["URMAA 2.5km CONUS"],
+            "pattern": "^.*$"
+          },
+          "description": {
+            "$id": "#root/datasets/items/description",
+            "title": "Description",
+            "type": "string",
+            "default": "",
+            "examples": ["Unrestricted Mesoscale Analysis (URMA) 2.5km CONUS"],
+            "pattern": "^.*$"
+          },
+          "source": {
+            "$id": "#root/datasets/items/source",
+            "title": "Source",
+            "type": "string",
+            "default": "",
+            "examples": [
+              "NOAA Real-Time Mesoscale Analysis (RTMA) / Unrestricted Mesoscale Analysis (URMA) was accessed on DATE from https://registry.opendata.aws/noaa-rtma."
+            ],
+            "pattern": "^.*$"
+          },
+          "module": {
+            "$id": "#root/datasets/items/module",
+            "title": "Module",
+            "type": "string",
+            "default": "",
+            "examples": ["mesoformer.datasets.urma"],
+            "pattern": "^.*$"
+          },
+          "start_date": {
+            "$id": "#root/datasets/items/start_date",
+            "title": "Start_date",
+            "type": "string",
+            "default": "",
+            "examples": ["2021-06-04 00:00:00+00:00"],
+            "pattern": "^.*$"
+          },
+          "end_date": {
+            "$id": "#root/datasets/items/end_date",
+            "title": "End_date",
+            "type": "string",
+            "default": "",
+            "examples": ["2021-06-04 00:00:00+00:00"],
+            "pattern": "^.*$"
+          },
+          "references": {
+            "$id": "#root/datasets/items/references",
+            "title": "References",
+            "type": "array",
+            "default": [],
+            "items": {
+              "$id": "#root/datasets/items/references/items",
+              "title": "Items",
+              "type": "string",
+              "default": "",
+              "examples": [
+                "https://www.emc.ncep.noaa.gov/emc/pages/numerical_forecast_systems/rtma.php"
+              ],
+              "pattern": "^.*$"
+            }
+          },
+          "channels": {
+            "$id": "#root/datasets/items/channels",
+            "title": "Channels",
+            "type": "array",
+            "default": [],
+            "items": {
+              "$id": "#root/datasets/items/channels/items",
+              "title": "Items",
+              "type": "object",
+              "required": [
+                "short_name",
+                "long_name",
+                "description",
+                "type_of_level",
+                "level",
+                "units"
+              ],
+              "properties": {
+                "description": {
+                  "$id": "#root/datasets/items/channels/items/description",
+                  "title": "Description",
+                  "type": "string",
+                  "default": "",
+                  "examples": [""],
+                  "pattern": "^.*$"
+                },
+                "short_name": {
+                  "$id": "#root/datasets/items/channels/items/short_name",
+                  "title": "Short_name",
+                  "type": "string",
+                  "default": "",
+                  "examples": ["tcc"],
+                  "pattern": "^[a-zA-Z_]+[a-zA-Z0-9_]*$"
+                },
+                "long_name": {
+                  "$id": "#root/datasets/items/channels/items/long_name",
+                  "title": "Long_name",
+                  "type": "string",
+                  "default": "",
+                  "examples": ["total_cloud_cover"],
+                  "pattern": "^[a-zA-Z_]+[a-zA-Z0-9_]*$"
+                },
+                "type_of_level": {
+                  "$id": "#root/datasets/items/channels/items/type_of_level",
+                  "description": "Type of level",
+                  "title": "Type_of_level",
+                  "type": "string",
+                  "default": "",
+                  "examples": ["atmosphereSingleLayer"],
+                  "pattern": "^.*$"
+                },
+                "level": {
+                  "$id": "#root/datasets/items/channels/items/level",
+                  "title": "Level",
+                  "type": "integer",
+                  "examples": [0],
+                  "default": 0
+                },
+                "units": {
+                  "$id": "#root/datasets/items/channels/items/units",
+                  "title": "Units",
+                  "type": "string",
+                  "default": "",
+                  "examples": ["%"],
+                  "pattern": "^.*$"
+                }
+              }
+            }
+          },
+          "crs": {
+            "$id": "#root/datasets/items/crs",
+            "title": "Crs",
+            "type": "object",
+            "required": [
+              "geographic_crs_name",
+              "projected_crs_name",
+              "grid_mapping_name",
+              "semi_major_axis",
+              "semi_minor_axis",
+              "inverse_flattening",
+              "reference_ellipsoid_name",
+              "longitude_of_prime_meridian",
+              "prime_meridian_name",
+              "horizontal_datum_name",
+              "latitude_of_projection_origin",
+              "longitude_of_projection_origin",
+              "standard_parallel",
+              "false_easting",
+              "false_northing",
+              "units"
+            ],
+            "properties": {
+              "geographic_crs_name": {
+                "$id": "#root/datasets/items/crs/geographic_crs_name",
+                "title": "Geographic_crs_name",
+                "type": "string",
+                "default": "",
+                "examples": ["NDFD CONUS 2.5km Lambert Conformal Conic"],
+                "pattern": "^.*$"
+              },
+              "projected_crs_name": {
+                "$id": "#root/datasets/items/crs/projected_crs_name",
+                "title": "Projected_crs_name",
+                "type": "string",
+                "default": "",
+                "examples": ["NDFD"],
+                "pattern": "^.*$"
+              },
+              "grid_mapping_name": {
+                "$id": "#root/datasets/items/crs/grid_mapping_name",
+                "title": "Grid_mapping_name",
+                "type": "string",
+                "default": "",
+                "examples": ["lambert_conformal_conic"],
+                "pattern": "^.*$"
+              },
+              "semi_major_axis": {
+                "$id": "#root/datasets/items/crs/semi_major_axis",
+                "title": "Semi_major_axis",
+                "type": "integer",
+                "examples": [6378137],
+                "default": 0
+              },
+              "semi_minor_axis": {
+                "$id": "#root/datasets/items/crs/semi_minor_axis",
+                "title": "Semi_minor_axis",
+                "type": "number",
+                "examples": [6356752.31424518],
+                "default": 0.0
+              },
+              "inverse_flattening": {
+                "$id": "#root/datasets/items/crs/inverse_flattening",
+                "title": "Inverse_flattening",
+                "type": "number",
+                "examples": [298.25722356301],
+                "default": 0.0
+              },
+              "reference_ellipsoid_name": {
+                "$id": "#root/datasets/items/crs/reference_ellipsoid_name",
+                "title": "Reference_ellipsoid_name",
+                "type": "string",
+                "default": "",
+                "examples": ["WGS 84"],
+                "pattern": "^.*$"
+              },
+              "longitude_of_prime_meridian": {
+                "$id": "#root/datasets/items/crs/longitude_of_prime_meridian",
+                "title": "Longitude_of_prime_meridian",
+                "type": "integer",
+                "examples": [0],
+                "default": 0
+              },
+              "prime_meridian_name": {
+                "$id": "#root/datasets/items/crs/prime_meridian_name",
+                "title": "Prime_meridian_name",
+                "type": "string",
+                "default": "",
+                "examples": ["Greenwich"],
+                "pattern": "^.*$"
+              },
+              "horizontal_datum_name": {
+                "$id": "#root/datasets/items/crs/horizontal_datum_name",
+                "title": "Horizontal_datum_name",
+                "type": "string",
+                "default": "",
+                "examples": ["WGS84"],
+                "pattern": "^.*$"
+              },
+              "latitude_of_projection_origin": {
+                "$id": "#root/datasets/items/crs/latitude_of_projection_origin",
+                "title": "Latitude_of_projection_origin",
+                "type": "number",
+                "examples": [20.191999],
+                "default": 0.0
+              },
+              "longitude_of_projection_origin": {
+                "$id": "#root/datasets/items/crs/longitude_of_projection_origin",
+                "title": "Longitude_of_projection_origin",
+                "type": "number",
+                "examples": [238.445999],
+                "default": 0.0
+              },
+              "standard_parallel": {
+                "$id": "#root/datasets/items/crs/standard_parallel",
+                "title": "Standard_parallel",
+                "type": "integer",
+                "examples": [25],
+                "default": 0
+              },
+              "false_easting": {
+                "$id": "#root/datasets/items/crs/false_easting",
+                "title": "False_easting",
+                "type": "integer",
+                "examples": [0],
+                "default": 0
+              },
+              "false_northing": {
+                "$id": "#root/datasets/items/crs/false_northing",
+                "title": "False_northing",
+                "type": "integer",
+                "examples": [0],
+                "default": 0
+              },
+              "units": {
+                "$id": "#root/datasets/items/crs/units",
+                "title": "Units",
+                "type": "string",
+                "default": "",
+                "examples": ["m"],
+                "pattern": "^.*$"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
