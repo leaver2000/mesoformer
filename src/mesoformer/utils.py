@@ -23,6 +23,7 @@ import numpy as np
 import toml
 from frozenlist import FrozenList
 from scipy.interpolate import RegularGridInterpolator
+from typing import Concatenate
 
 try:
     get_ipython  # type: ignore
@@ -31,9 +32,10 @@ except NameError:
     import tqdm
 
 import itertools
-
+import functools
 from .typing import (
     Any,
+    ArrayLike,
     AnyT,
     Array,
     Callable,
@@ -46,12 +48,30 @@ from .typing import (
     Sequence,
     StrPath,
     TypeVar,
+    NDArray,
 )
 
 T1 = TypeVar("T1")
 T2 = TypeVar("T2")
 T = TypeVar("T")
 P = ParamSpec("P")
+FloatingDTypeT = TypeVar("FloatingDTypeT", bound=np.floating, covariant=True)
+AnyT_co = TypeVar("AnyT_co", bound=Any, covariant=True)
+R_co = TypeVar("R_co", bound=Callable)
+P = ParamSpec("P")
+
+
+def as_any_array(dtype: type[FloatingDTypeT]):
+    def decorator(
+        func: Callable[Concatenate[NDArray[np.number], P], AnyT_co]
+    ) -> Callable[Concatenate[ArrayLike, P], AnyT_co]:
+        @functools.wraps(func)
+        def wrapper(x: ArrayLike, *args: P.args, **kwargs: P.kwargs) -> AnyT_co:
+            return func(np.asanyarray(x, dtype=dtype), *args, **kwargs)
+
+        return wrapper
+
+    return decorator
 
 
 def iter_not_strings(x: T1 | Iterable[T1]) -> Iterable[T1]:

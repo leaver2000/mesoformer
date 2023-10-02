@@ -195,13 +195,13 @@ PARTIAL_GETTERS = {
 }  # type: dict[str, functools.partial[GribGetter[Any, Any]]]
 
 
-def get_getter(resource: str) -> GribGetter[Any, Any]:
+def get_getter(resource: str, **kwargs: Any) -> GribGetter[Any, Any]:
     getter = PARTIAL_GETTERS[resource]
-    return getter()
+    return getter(**kwargs)
 
 
-def main(resource: str) -> None:
-    getter = get_getter(resource)
+def main(resource: str, **kwargs: Any) -> None:
+    getter = get_getter(resource, **kwargs)
     for source, destination in getter.iter():
         getter.get(source, destination)
         tqdm.tqdm.write(f"INFO: {source}")

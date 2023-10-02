@@ -24,6 +24,7 @@ __all__ = [
     "Collection",
     "EllipsisType",
     "NDArray",
+    "ArrayLike",
 ]
 import os
 import sys
@@ -53,7 +54,7 @@ from typing import (
 
 import numpy as np
 import torch
-from numpy.typing import NDArray
+from numpy.typing import NDArray, ArrayLike
 from pandas._typing import Scalar
 
 if sys.version_info <= (3, 9):
