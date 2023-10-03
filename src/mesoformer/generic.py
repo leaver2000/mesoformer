@@ -11,10 +11,11 @@ import textwrap
 import threading
 import types
 from typing import overload
-import pandas as pd
 
+import pandas as pd
 import pyproj
 from torch.utils.data import IterableDataset
+
 from .typing import (
     Any,
     DictStrAny,
@@ -29,7 +30,7 @@ from .typing import (
     Self,
     TypeVar,
 )
-from .utils import indent_kv, load_toml, nested_proxy, squish_map, find
+from .utils import find, indent_kv, load_toml, nested_proxy, squish_map
 
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "metadata.toml")
 

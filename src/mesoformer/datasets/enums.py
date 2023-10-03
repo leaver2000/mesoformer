@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 __all__ = [
     # - ERA5
     "ERA5Enum",
@@ -31,13 +30,15 @@ __all__ = [
 ]
 
 
-import types
-import pyproj
 import enum
+import types
+
 import pandas as pd
-from ..typing import Any, Self, EnumT, Iterable, overload
-from ..utils import squish_map
+import pyproj
+
 from ..generic import DatasetMetadata
+from ..typing import Any, EnumT, Iterable, Self, overload
+from ..utils import squish_map
 
 
 class CFDatasetEnumMeta(enum.EnumMeta):
