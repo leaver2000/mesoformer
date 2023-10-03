@@ -20,15 +20,15 @@ def min_max_scaler(x: NDArray[np.number], *, axis=None) -> NDArray[np.float32]:
 
 
 @as_any_array(np.float32)
-def std_scaler(x: NDArray[np.number], *, axis=None) -> NDArray[np.float_]:
+def std_scaler(x: NDArray[np.number], *, axis=None) -> NDArray[np.float32]:
     return (x - x.mean(axis)) / x.std(axis)
 
 
 @as_any_array(np.float32)
-def max_abs_scaler(x: NDArray[np.number], *, axis=None) -> NDArray[np.float_]:
+def max_abs_scaler(x: NDArray[np.number], *, axis=None) -> NDArray[np.float32]:
     return x / np.abs(x).max(axis)
 
 
 @as_any_array(np.float32)
-def normalize(x: NDArray[np.number]) -> NDArray[np.float_]:
+def normalize(x: NDArray[np.number]) -> NDArray[np.float32]:
     return (x - x.min(keepdims=True)) / (x.max(keepdims=True) - x.min(keepdims=True))
