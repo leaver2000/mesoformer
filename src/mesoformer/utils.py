@@ -18,12 +18,12 @@ import json
 import textwrap
 import types
 import urllib.parse
+from typing import Concatenate
 
 import numpy as np
 import toml
 from frozenlist import FrozenList
 from scipy.interpolate import RegularGridInterpolator
-from typing import Concatenate
 
 try:
     get_ipython  # type: ignore
@@ -31,24 +31,25 @@ try:
 except NameError:
     import tqdm
 
-import itertools
 import functools
+import itertools
+
 from .typing import (
     Any,
-    ArrayLike,
     AnyT,
     Array,
+    ArrayLike,
     Callable,
     Iterable,
     Mapping,
     N,
     Nd,
+    NDArray,
     Pair,
     ParamSpec,
     Sequence,
     StrPath,
     TypeVar,
-    NDArray,
 )
 
 T1 = TypeVar("T1")

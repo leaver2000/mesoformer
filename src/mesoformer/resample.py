@@ -1,6 +1,6 @@
-import numpy as np
 import metpy.calc
 import metpy.units as munits
+import numpy as np
 from numpy.typing import NDArray
 
 STANDARD_SURFACE_PRESSURE = 1_013.25

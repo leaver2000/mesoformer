@@ -4,4 +4,4 @@ try:
 except ImportError:
     grib = None
 
-from .core import time, level, lon, lat, x, y, conventions, StandardName
+from .core import StandardName, conventions, lat, level, lon, time, x, y

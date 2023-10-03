@@ -1,13 +1,25 @@
 from __future__ import annotations
 
 import textwrap
-from ..typing import Any, Final, Hashable, Iterable, Iterator, Literal, Mapping, overload, Callable, TypeVar
 import types
+
 import numpy as np
 import pandas as pd
 import xarray as xr
 from numpy.typing import NDArray
 
+from ..typing import (
+    Any,
+    Callable,
+    Final,
+    Hashable,
+    Iterable,
+    Iterator,
+    Literal,
+    Mapping,
+    TypeVar,
+    overload,
+)
 
 T = TypeVar("T")
 _ON_DISK = [

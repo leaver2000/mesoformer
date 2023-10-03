@@ -54,7 +54,7 @@ from typing import (
 
 import numpy as np
 import torch
-from numpy.typing import NDArray, ArrayLike
+from numpy.typing import ArrayLike, NDArray
 from pandas._typing import Scalar
 
 if sys.version_info <= (3, 9):
