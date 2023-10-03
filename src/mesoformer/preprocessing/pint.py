@@ -3,15 +3,23 @@ from __future__ import annotations
 from decimal import Decimal
 from fractions import Fraction
 
-
 import numpy as np
 import pint.registry
-
-
 from pint.facets.plain import PlainQuantity, PlainUnit
 from pint.registry import Quantity
-from ..typing import TypeAlias, Any, TypeVar, Final, overload, TypeGuard, NestedSequence, LiteralUnit, NDArray, Array
 
+from ..typing import (
+    Any,
+    Array,
+    Final,
+    LiteralUnit,
+    NDArray,
+    NestedSequence,
+    TypeAlias,
+    TypeGuard,
+    TypeVar,
+    overload,
+)
 
 Scalar: TypeAlias = float | int | Decimal | Fraction | np.number[Any]
 ScalarT = TypeVar("ScalarT", bound=Scalar)

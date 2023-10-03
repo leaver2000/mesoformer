@@ -1,6 +1,6 @@
 import numpy as np
 
-from ..typing import TypeVar, ParamSpec, Any, NDArray
+from ..typing import Any, NDArray, ParamSpec, TypeVar
 from ..utils import as_any_array
 
 FloatingDTypeT = TypeVar("FloatingDTypeT", bound=np.floating, covariant=True)

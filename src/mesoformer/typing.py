@@ -37,6 +37,7 @@ from typing import (
     Any,
     Callable,
     Collection,
+    Concatenate,
     Final,
     Generic,
     Hashable,
@@ -47,14 +48,13 @@ from typing import (
     NewType,
     Protocol,
     Sequence,
-    TypeGuard,
     Sized,
     TypedDict,
+    TypeGuard,
     TypeVar,
     Union,
     cast,
     overload,
-    Concatenate,
 )
 
 import numpy as np
