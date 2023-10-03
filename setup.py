@@ -1,6 +1,7 @@
 from setuptools import setup, Extension
-import numpy as np
 from pathlib import Path
+
+import numpy as np
 
 ROOT = Path(__file__).parent
 PROJECT_NAME = "mesoformer"

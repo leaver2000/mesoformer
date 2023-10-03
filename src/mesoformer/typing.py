@@ -77,7 +77,7 @@ else:
 
 
 if TYPE_CHECKING:
-    from ._stub_files.literal_unit import LiteralUnit
+    from ._stub_files.literal_unit import LiteralUnit  # pyright: ignore
 else:
     LiteralUnit = str
 

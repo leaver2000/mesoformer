@@ -150,8 +150,8 @@ STANDARD_PRESSURE_LEVELS = stp = quantity([p0.m, *map(float, range(1000, 25 - 11
 DRY_AIR_MOLECULAR_WEIGHT_RATIO = Md = quantity(28.96546e-3, kg / mol)
 DRY_AIR_GAS_CONST = Rd = quantity(R / Md)
 DRY_AIR_SPECIFIC_HEAT_RATIO = dash_r = quantity(1.4)
-DRY_AIR_SPECIFIC_HEAT_PRESSURE = Cp_d = quantity(dash_r * Rd / (dash_r - 1))
-DRY_AIR_SPECIFIC_HEAT_VOLUME = Cv_d = quantity(Cp_d / dash_r)
+DRY_AIR_SPECIFIC_HEAT_PRESSURE = Cp = quantity(dash_r * Rd / (dash_r - 1))
+DRY_AIR_SPECIFIC_HEAT_VOLUME = Cv = quantity(Cp / dash_r)
 pot_temp_ref_press = P0 = 1000.0 * mbar
 DRY_AIR_DENSITY_STP = rho_d = quantity(P0 / (Rd * -K0)).to(kg / m**3)
 DRY_AIR_MOLECULAR_WEIGHT_RATIO = Md = 28.96546e-3 * kg / mol
