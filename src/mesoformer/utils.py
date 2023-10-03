@@ -61,6 +61,13 @@ FloatingDTypeT = TypeVar("FloatingDTypeT", bound=np.floating, covariant=True)
 _T_co = TypeVar("_T_co", bound=Any, covariant=True)
 
 
+def find(func: Callable[[T], bool], x: Iterable[T]) -> T:
+    try:
+        return next(filter(func, x))
+    except StopIteration as e:
+        raise ValueError(f"no element in {x} satisfies {func}") from e
+
+
 def as_any_array(dtype: type[FloatingDTypeT]):
     def decorator(
         func: Callable[Concatenate[NDArray[np.number], P], _T_co]

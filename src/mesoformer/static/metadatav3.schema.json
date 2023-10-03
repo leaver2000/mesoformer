@@ -71,8 +71,11 @@
                 "type_of_level": {
                   "type": "string"
                 },
-                "level": {
-                  "type": "number"
+                "levels": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  }
                 },
                 "coordinates": {
                   "type": "array",
@@ -92,7 +95,7 @@
                 "long_name",
                 "standard_name",
                 "type_of_level",
-                "level",
+                "levels",
                 "coordinates",
                 "description",
                 "units"

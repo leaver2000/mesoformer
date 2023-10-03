@@ -1,4 +1,4 @@
-#:schema ./metadata2.schema.json
+#:schema ./metadatav3.schema.json
 
 title = ''
 description = ""
@@ -51,12 +51,13 @@ description = ""
 # - Unrestricted Mesoscale Analysis (URMA) 2.5km CONUS
 # =============================================================================
 [[datasets]]
-title = "URMA 2.5km CONUS"
+title = "URMA"
 institution = "NOAA/NWS/NCEP/EMC"
 source = "Unrestricted Mesoscale Analysis (URMA) 2.5km CONUS"
 history = "..."
 comment = "Unrestricted Mesoscale Analysis (URMA) 2.5km CONUS"
 
+# - coordinates
 [[datasets.coordinates]]
 short_name = "lat"
 long_name = "latitude"
@@ -75,12 +76,13 @@ long_name = "initial time of forecast"
 standard_name = "time"
 units = "hours since 1900-01-01 00:00:00.0"
 
+# - variables
 [[datasets.variables]]
 short_name = "ceil"
 long_name = "cloud ceiling"
 standard_name = "ceiling"
 type_of_level = "cloudCeiling"
-level = 0
+levels = [0]
 coordinates = ["latitude", "longitude", "time"]
 description = ""
 units = "m"
@@ -89,7 +91,7 @@ units = "m"
 short_name = "d2m"
 long_name = "2 meter dewpoint temperature"
 standard_name = "dewpoint_temperature_2m"
-level = 2
+levels = [2]
 type_of_level = "heightAboveGround"
 coordinates = ["latitude", "longitude", "time"]
 description = ""
@@ -99,7 +101,7 @@ units = "K"
 short_name = "sh2"
 long_name = "2 meter specific humidity"
 standard_name = "specific_humidity_2m"
-level = 2
+levels = [2]
 type_of_level = "heightAboveGround"
 coordinates = ["latitude", "longitude", "time"]
 description = ""
@@ -110,7 +112,7 @@ short_name = "sp"
 long_name = "surface pressure"
 standard_name = "surface_pressure"
 type_of_level = "surface"
-level = 0
+levels = [0]
 coordinates = ["latitude", "longitude", "time"]
 description = ""
 units = "Pa"
@@ -119,7 +121,7 @@ units = "Pa"
 short_name = "t2m"
 long_name = "2 meter temperature"
 standard_name = "temperature_2m"
-level = 2
+levels = [2]
 type_of_level = "heightAboveGround"
 units = "K"
 description = ""
@@ -129,7 +131,7 @@ coordinates = ["latitude", "longitude", "time"]
 short_name = "tcc"
 long_name = "total cloud cover"
 standard_name = "total_cloud_cover"
-level = 0
+levels = [0]
 type_of_level = "atmosphereSingleLayer"
 units = "%"
 coordinates = ["latitude", "longitude", "time"]
@@ -140,7 +142,7 @@ short_name = "u10"
 long_name = "10 meter u wind component"
 standard_name = "u_wind_component_10m"
 type_of_level = "heightAboveGround"
-level = 10
+levels = [10]
 units = "m s**-1"
 coordinates = ["latitude", "longitude", "time"]
 description = ""
@@ -150,7 +152,7 @@ short_name = "v10"
 long_name = "10 meter v wind component"
 standard_name = "v_wind_component_10m"
 type_of_level = "heightAboveGround"
-level = 10
+levels = [10]
 units = "m s**-1"
 coordinates = ["latitude", "longitude", "time"]
 description = ""
@@ -160,7 +162,7 @@ short_name = "vis"
 long_name = "visibility"
 standard_name = "visibility"
 type_of_level = "surface"
-level = 0
+levels = [0]
 units = "m"
 coordinates = ["latitude", "longitude", "time"]
 description = ""
@@ -169,7 +171,7 @@ description = ""
 long_name = "10 meter wind direction"
 short_name = "wdir10"
 type_of_level = "heightAboveGround"
-level = 10
+levels = [10]
 units = "Degree true"
 standard_name = "wind_direction_10m"
 coordinates = ["latitude", "longitude", "time"]
@@ -180,7 +182,7 @@ short_name = "si10"
 long_name = "10 meter wind speed"
 standard_name = "wind_speed_10m"
 type_of_level = "heightAboveGround"
-level = 10
+levels = [10]
 units = "m s**-1"
 coordinates = ["latitude", "longitude", "time"]
 description = ""
@@ -190,7 +192,7 @@ short_name = "gust"
 long_name = "wind speed gust"
 standard_name = "wind_speed_gust"
 type_of_level = "heightAboveGround"
-level = 0
+levels = [0]
 units = "m s**-1"
 coordinates = ["latitude", "longitude", "time"]
 description = ""
@@ -200,11 +202,12 @@ short_name = "orog"
 long_name = "surface orography"
 standard_name = "orography"
 type_of_level = "surface"
-level = 0
+levels = [0]
 units = "m"
 coordinates = ["latitude", "longitude"]
 description = ""
 
+# - coordinate reference system
 [datasets.crs]
 geographic_crs_name = "NDFD CONUS 2.5km Lambert Conformal Conic"
 projected_crs_name = "NDFD"
@@ -227,43 +230,108 @@ units = "m"
 # - ECMWF ERA5 0.25 degree
 # =============================================================================
 [[datasets]]
-title = "ECMWF ERA5 0.25 degree"
+title = "ERA5"
 institution = "ECMWF"
 source = ""
 history = ""
 comment = ""
 
+# - coordinates
 [[datasets.coordinates]]
-short_name = ""
-long_name = ""
-standard_name = ""
-units = ""
+short_name = "lat"
+long_name = "latitude"
+standard_name = "latitude"
+units = "degrees_north"
 
+[[datasets.coordinates]]
+short_name = "lon"
+long_name = "longitude"
+standard_name = "longitude"
+units = "degrees_east"
+
+[[datasets.coordinates]]
+short_name = "time"
+long_name = "initial time of forecast"
+standard_name = "time"
+units = "hours since 1900-01-01 00:00:00.0"
+
+[[datasets.coordinates]]
+short_name = "level"
+long_name = "initial time of forecast"
+standard_name = "air_pressure"
+stored_direction = 'decreasing'
+units = "hPa"
+
+# - variables
+[[datasets.variables]]
+short_name = "z"
+long_name = "Geopotential"
+standard_name = "geopotential"
+type_of_level = "isobaricInhPa"
+coordinates = ["latitude", "level", "longitude", "time"]
+levels = [200, 225, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 775, 800, 825, 850, 875, 900, 925, 950, 975, 1000]
+units = "m**2 s**-2"
+description = ""
 
 [[datasets.variables]]
-short_name = "a"
-long_name = ""
-standard_name = "a"
-type_of_level = ""
-level = 0
-coordinates = []
+short_name = "q"
+long_name = "Specific humidity"
+standard_name = "specific_humidity"
+type_of_level = "isobaricInhPa"
+coordinates = ["latitude", "level", "longitude", "time"]
+levels = [200, 225, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 775, 800, 825, 850, 875, 900, 925, 950, 975, 1000]
+units = "kg kg**-1"
 description = ""
-units = ""
 
+[[datasets.variables]]
+short_name = "t"
+long_name = "Temperature"
+standard_name = "temperature"
+type_of_level = "isobaricInhPa"
+coordinates = ["latitude", "level", "longitude", "time"]
+levels = [200, 225, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 775, 800, 825, 850, 875, 900, 925, 950, 975, 1000]
+units = "K"
+description = ""
+
+[[datasets.variables]]
+short_name = "u"
+long_name = "U component of wind"
+standard_name = "u_component_of_wind"
+type_of_level = "isobaricInhPa"
+coordinates = ["latitude", "level", "longitude", "time"]
+levels = [200, 225, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 775, 800, 825, 850, 875, 900, 925, 950, 975, 1000]
+units = "m s**-1"
+description = ""
+
+[[datasets.variables]]
+short_name = "v"
+long_name = "V component of wind"
+standard_name = "v_component_of_wind"
+type_of_level = "isobaricInhPa"
+coordinates = ["latitude", "level", "longitude", "time"]
+levels = [200, 225, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 775, 800, 825, 850, 875, 900, 925, 950, 975, 1000]
+units = "m s**-1"
+description = ""
+
+[[datasets.variables]]
+short_name = "w"
+long_name = "Vertical velocity"
+standard_name = "vertical_velocity"
+type_of_level = "isobaricInhPa"
+coordinates = ["latitude", "level", "longitude", "time"]
+levels = [200, 225, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 775, 800, 825, 850, 875, 900, 925, 950, 975, 1000]
+units = "Pa s**-1"
+description = ""
+
+# - coordinate reference system
 [datasets.crs]
-geographic_crs_name = ""
-projected_crs_name = ""
-grid_mapping_name = ""
-semi_major_axis = 0.0
-semi_minor_axis = 0.0
-inverse_flattening = 0.0
-reference_ellipsoid_name = ""
+crs_wkt = "GEOGCRS[\"WGS 84\",ENSEMBLE[\"World Geodetic System 1984 ensemble\",MEMBER[\"World Geodetic System 1984 (Transit)\"],MEMBER[\"World Geodetic System 1984 (G730)\"],MEMBER[\"World Geodetic System 1984 (G873)\"],MEMBER[\"World Geodetic System 1984 (G1150)\"],MEMBER[\"World Geodetic System 1984 (G1674)\"],MEMBER[\"World Geodetic System 1984 (G1762)\"],MEMBER[\"World Geodetic System 1984 (G2139)\"],ELLIPSOID[\"WGS 84\",6378137,298.257223563,LENGTHUNIT[\"metre\",1]],ENSEMBLEACCURACY[2.0]],PRIMEM[\"Greenwich\",0,ANGLEUNIT[\"degree\",0.0174532925199433]],CS[ellipsoidal,2],AXIS[\"geodetic latitude (Lat)\",north,ORDER[1],ANGLEUNIT[\"degree\",0.0174532925199433]],AXIS[\"geodetic longitude (Lon)\",east,ORDER[2],ANGLEUNIT[\"degree\",0.0174532925199433]],USAGE[SCOPE[\"Horizontal component of 3D system.\"],AREA[\"World.\"],BBOX[-90,-180,90,180]],ID[\"EPSG\",4326]]"
+geographic_crs_name="WGS 84"
+semi_major_axis = 6378137.0
+semi_minor_axis = 6356752.314245179
+inverse_flattening = 298.257223563
+reference_ellipsoid_name = "WGS 84"
 longitude_of_prime_meridian = 0.0
-prime_meridian_name = ""
-horizontal_datum_name = ""
-latitude_of_projection_origin = 0.0
-longitude_of_projection_origin = 0.0
-standard_parallel = 0.0
-false_easting = 0.0
-false_northing = 0.0
-units = ""
+prime_meridian_name = "Greenwich"
+horizontal_datum_name = "World Geodetic System 1984 ensemble"
+grid_mapping_name = "latitude_longitude"

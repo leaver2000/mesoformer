@@ -11,10 +11,10 @@ import textwrap
 import threading
 import types
 from typing import overload
+import pandas as pd
 
 import pyproj
 from torch.utils.data import IterableDataset
-
 from .typing import (
     Any,
     DictStrAny,
@@ -29,7 +29,9 @@ from .typing import (
     Self,
     TypeVar,
 )
-from .utils import indent_kv, load_toml, nested_proxy, squish_map
+from .utils import indent_kv, load_toml, nested_proxy, squish_map, find
+
+CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "metadata.toml")
 
 # =====================================================================================================================
 # - Type Variables
@@ -42,15 +44,22 @@ T2_co = TypeVar("T2_co", covariant=True)
 
 
 # =====================================================================================================================
-# - Enum objects
+# - Enum objects and metadata
 # =====================================================================================================================
-CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "metadata.toml")
-URMA_CONUS = "URMA 2.5km CONUS"
-
 
 _module2title = types.MappingProxyType(
-    {f"{__package__}.{module}": title for module, title in [("datasets.urma.constants", URMA_CONUS)]}
+    {
+        f"{__package__}.{module}": title
+        for module, title in [
+            ("datasets.urma.constants", "URMA 2.5km CONUS"),
+            ("datasets.era5.constants", "ERA5 0.25 degree GLOBAL"),
+        ]
+    }
 )
+
+
+# def get_metadata(value: str):
+#     return DatasetMetadata.from_title(_module2title[find(lambda name: value in name, _module2title.keys())])
 
 
 @dataclasses.dataclass(frozen=True, repr=False)
@@ -65,13 +74,19 @@ class DatasetMetadata:
     crs: pyproj.CRS
 
     @classmethod
-    def from_title(cls, title: str):
-        ds_meta = load_toml(CONFIG_FILE)["datasets"]
-        md: dict[str, Any] = next(filter(lambda x: x["title"] == title, ds_meta))
+    def from_title(cls, title: str) -> DatasetMetadata:
+        title = title.upper()
+        datasets = load_toml(CONFIG_FILE)["datasets"]  # type: list[dict[str, Any]]
+        md = find(lambda x: x["title"] == title, datasets)
         crs = pyproj.CRS.from_cf(md.pop("crs"))
         variables = nested_proxy({dvar["standard_name"]: dvar for dvar in md.pop("variables")})
 
         return cls(**md, variables=variables, crs=crs)
+
+    # @classmethod
+    # def from_alias(cls, value: str) -> DatasetMetadata:
+    #     title = _module2title[find(lambda name: value in name, _module2title.keys())]
+    #     return cls.from_title(title)
 
     def __repr__(self) -> str:
         content = indent_kv(
@@ -85,8 +100,18 @@ class DatasetMetadata:
         )
         return "\n".join([f"{self.__class__.__name__}:"] + content)
 
-
-import pandas as pd
+    def to_dataframe(self) -> pd.DataFrame:
+        columns = [
+            "short_name",
+            "standard_name",
+            "long_name",
+            "coordinates",
+            "type_of_level",
+            "levels",
+            "description",
+            "units",
+        ]
+        return pd.DataFrame(list(self.variables.values()))[columns]
 
 
 class CFDatasetEnumMeta(enum.EnumMeta):
@@ -122,19 +147,9 @@ class CFDatasetEnumMeta(enum.EnumMeta):
         return cls._metadata_.crs
 
     def to_dataframe(cls):
-        columns = [
-            "short_name",
-            "standard_name",
-            "long_name",
-            "coordinates",
-            "type_of_level",
-            "level",
-            "description",
-            "units",
-        ]
-        df = pd.DataFrame(list(cls.md.variables.values()))[columns]
-
+        df = cls.md.to_dataframe()
         df.index = pd.Index(df["standard_name"].map(lambda x: cls(x).name).rename("member_name"))
+
         return df
 
 
