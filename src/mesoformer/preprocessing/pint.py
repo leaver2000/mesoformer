@@ -2,28 +2,21 @@ from __future__ import annotations
 
 from decimal import Decimal
 from fractions import Fraction
-from typing import *  # pyright: ignore
+
 
 import numpy as np
 import pint.registry
-from numpy.typing import NDArray as _NDArray
+
+
 from pint.facets.plain import PlainQuantity, PlainUnit
-from pint.registry import Quantity, Unit
+from pint.registry import Quantity
+from ..typing import TypeAlias, Any, TypeVar, Final, overload, TypeGuard, NestedSequence, LiteralUnit, NDArray, Array
 
-if TYPE_CHECKING:
-    from ._literal_unit import LiteralUnit  # pyright: ignore
-else:
-    LiteralUnit = str
-
-_T = TypeVar("_T", bound=Any)
-NDArray: TypeAlias = _NDArray[_T]
-NestedSequence: TypeAlias = "Sequence[_T | NestedSequence[_T]]"
 
 Scalar: TypeAlias = float | int | Decimal | Fraction | np.number[Any]
 ScalarT = TypeVar("ScalarT", bound=Scalar)
+ArrayLike: TypeAlias = NestedSequence[ScalarT] | Array[..., ScalarT]
 
-
-ArrayLike: TypeAlias = "NDArray[ScalarT] | NestedSequence[ScalarT]"
 
 # ================================================================================
 ureg: Final = pint.UnitRegistry()
@@ -44,8 +37,8 @@ F: Final = unit("fahrenheit")
 # - metric
 m = unit("meter")
 km = unit("kilometer")
-# - imperial
 
+# - imperial
 in_ = unit("inch")
 ft = unit("foot")
 mi = unit("mile")
@@ -56,7 +49,7 @@ hPa = unit("hectopascal")
 kPa = unit("kilopascal")
 mbar = unit("millibar")
 
-# • energy
+# • [energy]
 J = unit("joule")
 kJ = unit("kilojoule")
 cal = unit("calorie")
@@ -85,7 +78,7 @@ dimensionless = unit("dimensionless")
 
 # ================================================================================
 @ureg.wraps(dimensionless, hPa)
-def log_p(x) -> Quantity:
+def logp(x) -> Quantity:
     return np.log(x)
 
 
@@ -105,19 +98,25 @@ def quantity(
 def quantity(
     x: ArrayLike[ScalarT],
     unit: pint.Unit | Quantity | LiteralUnit | PlainUnit | PlainQuantity = dimensionless,
-) -> PlainQuantity[NDArray[ScalarT]]:  # type: ignore
+) -> PlainQuantity[Array[..., ScalarT]]:
     ...
 
 
 def quantity(
     x: ScalarT | ArrayLike[ScalarT],
     unit: pint.Unit | Quantity | LiteralUnit | PlainUnit | PlainQuantity = dimensionless,
-) -> PlainQuantity[ScalarT] | PlainQuantity[NDArray[ScalarT]]:  # type: ignore
+) -> PlainQuantity[ScalarT] | PlainQuantity[Array[..., ScalarT]]:
     unit = ureg(unit) if isinstance(unit, str) else unit
     return (x if isscaler(x) else np.asanyarray(x)) * unit  # type: ignore
 
 
 # ================================================================================
+# • [constants]
+GEOCENTRIC_GRAVITATIONAL_CONSTANT = GM = quantity(3986005e8, m**3 / s**2)
+ABSOLUTE_ZERO = K0 = quantity(-273.15, K)
+MOLAR_GAS_CONSTANT = R = quantity(8.314462618, J / mol / K)
+
+# • Earth
 EARTH_GRAVITY = g = quantity(9.80665, m / s**2)
 """
 The standard acceleration due to gravity `g` at the Earth's surface.
@@ -127,26 +126,20 @@ GRAVITATIONAL_CONSTANT = G = quantity(6.67408e-11, m**3 / kg / s**2)
 The gravitational constant `G` is a key quantity in Newton's law of universal gravitation.
 """
 EARTH_RADIUS = Re = quantity(6371008.7714, m)
-GEOCENTRIC_GRAVITATIONAL_CONSTANT = GM = quantity(3986005e8, m**3 / s**2)
-
 EARTH_MASS = Me = GEOCENTRIC_GRAVITATIONAL_CONSTANT / GRAVITATIONAL_CONSTANT
-ABSOLUTE_ZERO = K0 = quantity(-273.15, K)
-MOLAR_GAS_CONSTANT = R = quantity(8.314462618, J / mol / K)
 
-
+# • Standard Atmosphere
 STANDARD_TEMPERATURE = t0 = quantity(288.0, K)
 """Standard temperature at sea level."""
 STANDARD_PRESSURE = p0 = quantity(1013.25, hPa)
 """Standard pressure at sea level."""
 STANDARD_LAPSE_RATE = gamma = quantity(6.5, K / km)
 """Standard lapse rate."""
-STANDARD_PRESSURE_LEVELS = quantity([p0.m, *map(float, range(1000, 25 - 11, -25))], unit=hPa)
-
-MOLAR_GAS_CONSTANT = R = quantity(8.314462618, J / mol / K)
-DRY_AIR_MOLECULAR_WEIGHT_RATIO = Md = quantity(28.96546e-3, kg / mol)
+STANDARD_PRESSURE_LEVELS = stp = quantity([p0.m, *map(float, range(1000, 25 - 11, -25))], unit=hPa)
 
 
 # • Dry air
+DRY_AIR_MOLECULAR_WEIGHT_RATIO = Md = quantity(28.96546e-3, kg / mol)
 DRY_AIR_GAS_CONST = Rd = quantity(R / Md)
 DRY_AIR_SPECIFIC_HEAT_RATIO = dash_r = quantity(1.4)
 DRY_AIR_SPECIFIC_HEAT_PRESSURE = Cp_d = quantity(dash_r * Rd / (dash_r - 1))

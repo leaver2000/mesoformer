@@ -57,17 +57,15 @@ T2 = TypeVar("T2")
 T = TypeVar("T")
 P = ParamSpec("P")
 FloatingDTypeT = TypeVar("FloatingDTypeT", bound=np.floating, covariant=True)
-AnyT_co = TypeVar("AnyT_co", bound=Any, covariant=True)
-R_co = TypeVar("R_co", bound=Callable)
-P = ParamSpec("P")
+_T_co = TypeVar("_T_co", bound=Any, covariant=True)
 
 
 def as_any_array(dtype: type[FloatingDTypeT]):
     def decorator(
-        func: Callable[Concatenate[NDArray[np.number], P], AnyT_co]
-    ) -> Callable[Concatenate[ArrayLike, P], AnyT_co]:
+        func: Callable[Concatenate[NDArray[np.number], P], _T_co]
+    ) -> Callable[Concatenate[ArrayLike, P], _T_co]:
         @functools.wraps(func)
-        def wrapper(x: ArrayLike, *args: P.args, **kwargs: P.kwargs) -> AnyT_co:
+        def wrapper(x: ArrayLike, *args: P.args, **kwargs: P.kwargs) -> _T_co:
             return func(np.asanyarray(x, dtype=dtype), *args, **kwargs)
 
         return wrapper

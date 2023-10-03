@@ -25,6 +25,9 @@ __all__ = [
     "EllipsisType",
     "NDArray",
     "ArrayLike",
+    "Concatenate",
+    "TypeGuard",
+    "LiteralUnit",
 ]
 import os
 import sys
@@ -44,12 +47,14 @@ from typing import (
     NewType,
     Protocol,
     Sequence,
+    TypeGuard,
     Sized,
     TypedDict,
     TypeVar,
     Union,
     cast,
     overload,
+    Concatenate,
 )
 
 import numpy as np
@@ -70,6 +75,11 @@ else:
     from types import EllipsisType
     from typing import ParamSpec, Self, TypeAlias, TypeVarTuple, Unpack
 
+
+if TYPE_CHECKING:
+    from ._stub_files.literal_unit import LiteralUnit
+else:
+    LiteralUnit = str
 
 # =====================================================================================================================
 Ts = TypeVarTuple("Ts")
@@ -93,7 +103,7 @@ DictStrAny: TypeAlias = DictStr[Any]
 StrPath: TypeAlias = "str | os.PathLike[str]"
 PatchSize: TypeAlias = 'int | Literal["upscale", "downscale"]'
 Pair: TypeAlias = tuple[AnyT, AnyT]
-NestedSequence: TypeAlias = "Sequence[T | NestedSequence[T]]"
+NestedSequence: TypeAlias = Sequence[Union[AnyT, "NestedSequence[AnyT]"]]
 
 if TYPE_CHECKING:
     import torch
