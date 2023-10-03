@@ -108,8 +108,6 @@ NestedSequence: TypeAlias = Sequence[Union[AnyT, "NestedSequence[AnyT]"]]
 if TYPE_CHECKING:
     import torch
 
-    # from matplotlib.figure import Figure
-
     class _TensorLike(torch.Tensor, Generic[_NdT, AnyT]):
         dtype: AnyT
 

@@ -57,6 +57,7 @@ T2 = TypeVar("T2")
 T = TypeVar("T")
 P = ParamSpec("P")
 FloatingDTypeT = TypeVar("FloatingDTypeT", bound=np.floating, covariant=True)
+
 _T_co = TypeVar("_T_co", bound=Any, covariant=True)
 
 
@@ -111,7 +112,6 @@ def arange_slice(
         start, stop = 0, start
     if ppad == 0:
         ppad = None
-
     elif stop < start:
         raise ValueError(f"stop ({stop}) must be less than start ({start})")
 
