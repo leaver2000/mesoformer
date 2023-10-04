@@ -55,6 +55,7 @@ _T1 = TypeVar("_T1")
 _T2 = TypeVar("_T2")
 
 
+# =====================================================================================================================
 @overload
 def normalize(x: NDArray[np.number]) -> NDArray[np.float32]:
     ...
@@ -69,6 +70,7 @@ def normalize(x: torch.Tensor | NDArray[np.number], **kwargs) -> NDArray[np.floa
     return x - x.min(**kwargs) / (x.max(**kwargs) - x.min(**kwargs))  # type: ignore
 
 
+# =====================================================================================================================
 def find(func: Callable[[_T1], bool], x: Iterable[_T1]) -> _T1:
     try:
         return next(filter(func, x))
