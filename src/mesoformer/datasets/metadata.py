@@ -30,15 +30,65 @@ __all__ = [
 ]
 
 
+import dataclasses
 import enum
+import textwrap
 import types
 
 import pandas as pd
 import pyproj
 
-from ..generic import DatasetMetadata
+from ..config import get_dataset
 from ..typing import Any, EnumT, Iterable, Self, overload
-from ..utils import squish_map
+from ..utils import indent_kv, nested_proxy, squish_map
+
+
+@dataclasses.dataclass(frozen=True, repr=False)
+class DatasetMetadata:
+    title: str
+    institution: str
+    source: str
+    history: str
+    comment: str
+    coordinates: list[dict[str, Any]]
+    variables: types.MappingProxyType[str, types.MappingProxyType[str, Any]]
+    crs: pyproj.CRS
+
+    @classmethod
+    def from_title(cls, title: str) -> DatasetMetadata:
+        md = get_dataset(title)
+        # title = title.upper()
+        # datasets = load_toml(CONFIG_FILE)["datasets"]  # type: list[dict[str, Any]]
+        # md = find(lambda x: x["title"] == title, datasets)
+        crs = pyproj.CRS.from_cf(md.pop("crs"))
+        variables = nested_proxy({dvar["standard_name"]: dvar for dvar in md.pop("variables")})
+
+        return cls(**md, variables=variables, crs=crs)
+
+    def __repr__(self) -> str:
+        content = indent_kv(
+            ("title", self.title),
+            ("institution", self.institution),
+            ("source", self.source),
+            ("history", self.history),
+            ("comment", self.comment),
+            ("coordinates", self.coordinates),
+            ("crs", textwrap.indent(repr(self.crs), "  ").strip()),
+        )
+        return "\n".join([f"{self.__class__.__name__}:"] + content)
+
+    def to_dataframe(self) -> pd.DataFrame:
+        columns = [
+            "short_name",
+            "standard_name",
+            "long_name",
+            "coordinates",
+            "type_of_level",
+            "levels",
+            "description",
+            "units",
+        ]
+        return pd.DataFrame(list(self.variables.values()))[columns]
 
 
 class CFDatasetEnumMeta(enum.EnumMeta):

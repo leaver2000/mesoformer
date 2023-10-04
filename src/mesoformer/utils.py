@@ -18,10 +18,11 @@ import json
 import textwrap
 import types
 import urllib.parse
-from typing import Concatenate
+from collections.abc import Sequence
 
 import numpy as np
 import toml
+import torch
 from frozenlist import FrozenList
 from scipy.interpolate import RegularGridInterpolator
 
@@ -31,14 +32,12 @@ try:
 except NameError:
     import tqdm
 
-import functools
 import itertools
 
 from .typing import (
     Any,
     AnyT,
     Array,
-    ArrayLike,
     Callable,
     Iterable,
     Mapping,
@@ -50,6 +49,7 @@ from .typing import (
     Sequence,
     StrPath,
     TypeVar,
+    overload,
 )
 
 T1 = TypeVar("T1")
@@ -58,7 +58,19 @@ T = TypeVar("T")
 P = ParamSpec("P")
 FloatingDTypeT = TypeVar("FloatingDTypeT", bound=np.floating, covariant=True)
 
-_T_co = TypeVar("_T_co", bound=Any, covariant=True)
+
+@overload
+def normalize(x: NDArray[np.number]) -> NDArray[np.float32]:
+    ...
+
+
+@overload
+def normalize(x: torch.Tensor) -> torch.Tensor:
+    ...
+
+
+def normalize(x: torch.Tensor | NDArray[np.number], **kwargs) -> NDArray[np.float32] | torch.Tensor:
+    return x - x.min(**kwargs) / (x.max(**kwargs) - x.min(**kwargs))  # type: ignore
 
 
 def find(func: Callable[[T], bool], x: Iterable[T]) -> T:
@@ -66,19 +78,6 @@ def find(func: Callable[[T], bool], x: Iterable[T]) -> T:
         return next(filter(func, x))
     except StopIteration as e:
         raise ValueError(f"no element in {x} satisfies {func}") from e
-
-
-def as_any_array(dtype: type[FloatingDTypeT]):
-    def decorator(
-        func: Callable[Concatenate[NDArray[np.number], P], _T_co]
-    ) -> Callable[Concatenate[ArrayLike, P], _T_co]:
-        @functools.wraps(func)
-        def wrapper(x: ArrayLike, *args: P.args, **kwargs: P.kwargs) -> _T_co:
-            return func(np.asanyarray(x, dtype=dtype), *args, **kwargs)
-
-        return wrapper
-
-    return decorator
 
 
 def iter_not_strings(x: T1 | Iterable[T1]) -> Iterable[T1]:

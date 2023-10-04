@@ -65,6 +65,13 @@ def open_mfdataset(files: list[str], variables: list[CFDatasetEnum]):
     return ds
 
 
+def to_zarr(ds: xr.Dataset, out_path: str) -> None:
+    if os.path.exists(out_path):
+        ds.to_zarr(out_path, mode="a", consolidated=True, append_dim="time")
+    else:
+        ds.to_zarr(out_path, mode="w", consolidated=True)
+
+
 def main(variables=DEFAULT_VARIABLES):
     data_path = "/mnt/data"
     folder_list = sorted(glob.glob(os.path.join(data_path, "urma2p5/*")))
