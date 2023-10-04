@@ -27,7 +27,10 @@ __all__ = [
     "ArrayLike",
     "Concatenate",
     "TypeGuard",
-    "LiteralUnit",
+    "TensorLike",
+    "Scalar",
+    "Hashable",
+    "Literal",
 ]
 import os
 import sys
@@ -58,8 +61,8 @@ from typing import (
 )
 
 import numpy as np
-import torch
-from numpy.typing import ArrayLike, NDArray
+from numpy.typing import ArrayLike
+from numpy.typing import NDArray as _NDArray
 from pandas._typing import Scalar
 
 if sys.version_info <= (3, 9):
@@ -75,47 +78,47 @@ else:
     from types import EllipsisType
     from typing import ParamSpec, Self, TypeAlias, TypeVarTuple, Unpack
 
-
+P = ParamSpec("P")
 if TYPE_CHECKING:
-    from ._stub_files.literal_unit import LiteralUnit  # pyright: ignore
+    from numpy._typing._nested_sequence import _NestedSequence
+
+    from ._typing._tensor import TensorLike  # pyright: ignore
+
+    class nd(Concatenate[P]):
+        ...
+
 else:
-    LiteralUnit = str
-
+    TensorLike = Callable
+    _NestedSequence: TypeAlias = Sequence
+    nd = tuple
 # =====================================================================================================================
+T = TypeVar("T", bound=Any)
+T_co = TypeVar("T_co", bound=Any, covariant=True)
+T_contra = TypeVar("T_contra", bound=Any, contravariant=True)
 Ts = TypeVarTuple("Ts")
-T = TypeVar("T")
-T1_co = TypeVar("T1_co", covariant=True)
-T2_co = TypeVar("T2_co", covariant=True)
+NDArray: TypeAlias = _NDArray[T_co] | _NDArray[Any]
 
-AnyT = TypeVar("AnyT", bound=Any)
-KeyT = TypeVar("KeyT", bound=Hashable)
-ValueT = TypeVar("ValueT")
-ScalarT = TypeVar("ScalarT", bound=Scalar)
 
-NdAny = NewType("Nd[...]", "Nd[EllipsisType]")  # type: ignore[valid-type]
-_NdT = TypeVar("_NdT", bound="Nd")
-EnumT = TypeVar("EnumT", bound="PlotEnumProtocol")
-FrameT = TypeVar("FrameT", bound="FrameProtocol[Any, Any]")
+EnumT = TypeVar("EnumT", bound="EnumProtocol")
+Number = Union[int, float, bool, np.number, np.bool_]
 
-Number = Union[int, float, bool]
-DictStr: TypeAlias = dict[str, AnyT]
+NestedSequence: TypeAlias = _NestedSequence[T]
+SequenceLike: TypeAlias = "NestedSequence[T] | TensorLike[..., T] | NDArray[T]"
+
+
+Pair: TypeAlias = tuple[T, T]
+
+
+DictStr: TypeAlias = dict[str, T]
 DictStrAny: TypeAlias = DictStr[Any]
 StrPath: TypeAlias = "str | os.PathLike[str]"
-PatchSize: TypeAlias = 'int | Literal["upscale", "downscale"]'
-Pair: TypeAlias = tuple[AnyT, AnyT]
-NestedSequence: TypeAlias = Sequence[Union[AnyT, "NestedSequence[AnyT]"]]
-
-if TYPE_CHECKING:
-    import torch
-
-    class _TensorLike(torch.Tensor, Generic[_NdT, AnyT]):
-        dtype: AnyT
-
 
 # =====================================================================================================================
 # - Protocols
 # =====================================================================================================================
-class Indices(Sized, Iterable[T1_co], Protocol[T1_co]):
+
+
+class Indices(Sized, Iterable[T_co], Protocol[T_co]):
     ...
 
 
@@ -127,21 +130,6 @@ class Closeable(Protocol):
 class Shaped(Sized, Protocol):
     @property
     def shape(self) -> tuple[int, ...]:
-        ...
-
-
-class FrameProtocol(Shaped, Generic[T1_co, T2_co], Protocol):
-    @property
-    def columns(self) -> T1_co:
-        ...
-
-    @property
-    def dtypes(self) -> T2_co:
-        ...
-
-
-class GetItemSliceToSelf(Sized, Protocol[T1_co]):
-    def __getitem__(self, idx: slice) -> Sequence[T1_co]:
         ...
 
 
@@ -166,37 +154,8 @@ class EnumProtocol(Protocol[T]):
         ...
 
 
-class PlotEnumProtocol(EnumProtocol, Protocol):
-    @classmethod
-    def map(cls: type[EnumT], __iterable: Iterable[Any] | None = None) -> tuple[EnumT, ...]:
-        ...
-
-    @classmethod
-    def __iter__(cls) -> Self:
-        ...
-
-    @classmethod
-    def __next__(cls) -> Self:
-        ...
+N = NewType("N", int)
 
 
-# =====================================================================================================================
-class Nd(Generic[Unpack[Ts]]):
-    ...
-
-
-# =====================================================================================================================
-N = NewType(":", int)
-NAny = NewType("...", Any)
-Batch = NewType("Batch", int)
-Channel = NewType("Channel", int)
-Length = NewType("Length", int)
-Width = NewType("Width", int)
-Time = NewType("Time", int)
-Height = NewType("Height", int)
-Array: TypeAlias = np.ndarray[_NdT, np.dtype[AnyT]]
-
-
-TensorLike: TypeAlias = "Union[_TensorLike[Nd[Unpack[Ts]], torch.dtype], torch.Tensor]"
-AnyArray: TypeAlias = "Array[Nd[Unpack[Ts]], Any] | TensorLike[Nd[Unpack[Ts]], torch.dtype]"
-TensorF32: TypeAlias = "TensorLike[Nd[Unpack[Ts]], torch.dtype]"
+Array = np.ndarray[nd[P], T_contra] | NDArray[T_contra]
+""">>> x: Array[[N], np.int_] = np.array([1, 2, 3]) # Array[(N), int]"""

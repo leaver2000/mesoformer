@@ -6,10 +6,13 @@ import queue
 import random
 import threading
 
+import numpy as np
 from torch.utils.data import IterableDataset
 
-from .typing import (
+from .typing import (  # T,; P,
     Any,
+    ArrayLike,
+    Concatenate,
     DictStrAny,
     Final,
     Generic,
@@ -17,20 +20,42 @@ from .typing import (
     Iterable,
     Iterator,
     Mapping,
+    N,
+    NDArray,
+    NestedSequence,
+    ParamSpec,
     Self,
+    Sequence,
+    T,
     TypeVar,
 )
+from .utils import indent_kv
 
 K = TypeVar("K", bound=Hashable)
-V = TypeVar("V")
+S = TypeVar("S")
+P = ParamSpec("P")
 
 
-class DataMapping(Mapping[K, V], abc.ABC):
-    def __init__(self, data: Mapping[K, V]) -> None:
+class Contents(Generic[T], abc.ABC):
+    @property
+    @abc.abstractmethod
+    def content(self) -> Iterable[tuple[str, T]]:
+        ...
+
+    def to_dict(self) -> dict[str, T]:
+        return dict(self.content)
+
+    def __repr__(self) -> str:
+        content = indent_kv(*self.content)
+        return "\n".join([f"{self.__class__.__name__}:"] + content)
+
+
+class DataMapping(Mapping[K, T]):
+    def __init__(self, data: Mapping[K, T]) -> None:
         super().__init__()
-        self._data: Final[Mapping[K, V]] = data
+        self._data: Final[Mapping[K, T]] = data
 
-    def __getitem__(self, key: K) -> V:
+    def __getitem__(self, key: K) -> T:
         return self._data[key]
 
     def __iter__(self) -> Iterator[K]:
@@ -39,11 +64,11 @@ class DataMapping(Mapping[K, V], abc.ABC):
     def __len__(self) -> int:
         return len(self._data)
 
-    def to_dict(self) -> dict[K, V]:
+    def to_dict(self) -> dict[K, T]:
         return dict(self)
 
 
-class DataWorker(Mapping[K, V], abc.ABC):
+class DataWorker(Mapping[K, T]):
     __slots__ = ("_indices", "config")
 
     def __init__(self, *, indices: Iterable[K], **config: Any) -> None:
@@ -77,7 +102,7 @@ class DataWorker(Mapping[K, V], abc.ABC):
         return self
 
     @abc.abstractmethod
-    def __getitem__(self, key: K) -> V:
+    def __getitem__(self, key: K) -> T:
         ...
 
     @abc.abstractmethod
@@ -85,15 +110,15 @@ class DataWorker(Mapping[K, V], abc.ABC):
         ...
 
 
-class DataConsumer(Generic[K, V], IterableDataset[V], abc.ABC):
+class ABCDataConsumer(Generic[K, T], IterableDataset[T]):
     @property
     def name(self) -> str:
         return self.__class__.__name__
 
-    def __init__(self, worker: DataWorker[K, V], *, maxsize: int = 0, timeout: float | None = None) -> None:
+    def __init__(self, worker: DataWorker[K, T], *, maxsize: int = 0, timeout: float | None = None) -> None:
         super().__init__()
         self.thread: Final = threading.Thread(target=self._target, name=self.name, daemon=True)
-        self.queue: Final = queue.Queue[V](maxsize=maxsize)
+        self.queue: Final = queue.Queue[T](maxsize=maxsize)
         self.worker: Final = worker
         self.timeout: Final = timeout
 
@@ -104,7 +129,7 @@ class DataConsumer(Generic[K, V], IterableDataset[V], abc.ABC):
     def __len__(self) -> int:
         return len(self.worker)
 
-    def __iter__(self) -> Iterator[V]:
+    def __iter__(self) -> Iterator[T]:
         if not self.thread.is_alive():
             self.start()
         # range is the safest option here, because the queue size may change
@@ -115,3 +140,41 @@ class DataConsumer(Generic[K, V], IterableDataset[V], abc.ABC):
         self.worker.start()
         self.thread.start()
         return self
+
+
+class ABCArray(Sequence[T], Generic[S, T], abc.ABC):
+    ...
+
+
+class Array(ABCArray[Concatenate[P], T]):
+    def __init__(self, data: NestedSequence[T] | NDArray[T]) -> None:
+        super().__init__()
+        self._data = np.asanyarray(data)
+
+    def __len__(self) -> int:
+        return len(self._data)
+
+    def __iter__(self) -> Iterator[T]:
+        return iter(self._data)
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}:\n{np.array2string(self._data)}"
+
+    def __array__(self) -> NDArray[T]:
+        return self._data
+
+    def __getitem__(self, idx: N | tuple[N, ...] | Array[..., np.bool_]) -> Array[..., T]:
+        return Array(self._data[idx])
+
+    @property
+    def size(self) -> int:
+        return self._data.size
+
+    def is_in(self, x: ArrayLike) -> Array[P, np.bool_]:
+        return Array(np.isin(self._data, x))  # type: ignore
+
+    def to_numpy(self) -> NDArray[T]:
+        return self._data
+
+    def item(self) -> T:
+        return self._data.item()

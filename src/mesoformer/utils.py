@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 __all__ = [
+    "normalize",
+    "normalized_scale",
+    "sort_unique",
     "arange_slice",
     "frozen_list",
     "interp_frames",
@@ -14,6 +17,7 @@ __all__ = [
     "load_toml",
     "tqdm",
 ]
+import itertools
 import json
 import textwrap
 import types
@@ -32,122 +36,88 @@ try:
 except NameError:
     import tqdm
 
-import itertools
-
-from .typing import (
+from .typing import (  # Array,; Nd,
     Any,
-    AnyT,
     Array,
     Callable,
     Iterable,
+    Iterator,
     Mapping,
     N,
-    Nd,
     NDArray,
     Pair,
     Sequence,
+    SequenceLike,
     StrPath,
+    T,
+    TensorLike,
     TypeVar,
-    overload,
 )
 
 _T1 = TypeVar("_T1")
 _T2 = TypeVar("_T2")
 
+T_co = TypeVar("T_co", covariant=True)
 
-# =====================================================================================================================
-@overload
-def normalize(x: NDArray[np.number]) -> NDArray[np.float32]:
-    ...
-
-
-@overload
-def normalize(x: torch.Tensor) -> torch.Tensor:
-    ...
-
-
-def normalize(x: NDArray[np.number] | torch.Tensor, **kwargs) -> NDArray[np.float_] | torch.Tensor:
-    return x - x.min(**kwargs) / (x.max(**kwargs) - x.min(**kwargs))  # type: ignore
-
-
-@overload
-def scale(x: NDArray[np.number], rate: float = ...) -> NDArray[np.float_]:
-    ...
-
-
-@overload
-def scale(x: torch.Tensor, rate: float = ...) -> torch.Tensor:
-    ...
-
-
-def scale(x: NDArray[np.number] | torch.Tensor, rate: float = 1.0) -> NDArray[np.float_] | torch.Tensor:
-    return normalize(x) * rate + 1
+TensorT = TypeVar("TensorT", bound=TensorLike)
 
 
 # =====================================================================================================================
-def find(func: Callable[[_T1], bool], x: Iterable[_T1]) -> _T1:
-    try:
-        return next(filter(func, x))
-    except StopIteration as e:
-        raise ValueError(f"no element in {x} satisfies {func}") from e
-
-
-def iter_not_strings(x: _T1 | Iterable[_T1]) -> Iterable[_T1]:
-    """
-    >>> list(iter_not_strings(None))
-    [None]
-    >>> list(iter_not_strings((1,2,3,4)))
-    [1, 2, 3, 4]
-    >>> list(iter_not_strings('hello'))
-    ['hello']
-    >>> list(iter_not_strings(['hello', 'world']))
-    ['hello', 'world']
-    """
-    return iter([x] if isinstance(x, str) or not isinstance(x, Iterable) else x)  # type: ignore
-
-
-def squish_map(func: Callable[[_T1], _T2], __iterable: _T1 | Iterable[_T1], *args: _T1) -> map[_T2]:
-    """
-    >>> assert list(squish_map(lambda x: x, "foo", "bar", "baz")) == ["foo", "bar", "baz"]
-    >>> assert list(squish_map(str, range(3), 4, 5)) == ["0", "1", "2", "4", "5"]
-    >>> assert list(squish_map("hello {}".format, (x for x in ("foo", "bar")), "spam")) == ["hello foo", "hello bar", "hello spam"]
-    """
-
-    return map(func, itertools.chain(iter_not_strings(__iterable), iter(args)))
-
-
+# - array/tensor utils
 # =====================================================================================================================
-def frozen_list(item: Sequence[_T1]) -> list[_T1]:
-    fl = FrozenList(item)
-    fl.freeze()
-    return fl  # type: ignore
+def log_scale(x: NDArray[np.float_], rate: float = 1.0) -> NDArray[np.float_]:
+    x = normalize(np.log(x))
+    x *= rate
+    x += 1
+    return x
 
 
-def arange_slice(
-    start: int, stop: int | None, rows: int | None, ppad: int | None, step: int | None = None
-) -> list[slice]:
-    if stop is None:
-        start, stop = 0, start
-    if ppad == 0:
-        ppad = None
-    elif stop < start:
-        raise ValueError(f"stop ({stop}) must be less than start ({start})")
+def normalize(x: TensorT, **kwargs) -> TensorT:
+    """
+    Normalize the input tensor along the specified dimensions.
 
-    stop += 1  # stop is exclusive
+    Args:
+        x: Input tensor to be normalized.
+        **kwargs: Additional arguments to be passed to the `min` and `max` functions.
 
-    if rows is None:
-        rows = 1
+    Returns:
+        Normalized tensor.
 
-    if ppad is not None:
-        if ppad > rows:
-            raise ValueError(f"pad ({ppad}) must be less than freq ({rows})")
-        it = zip(range(start, stop, rows // ppad), range(start + rows, stop, rows // ppad))
-    else:
-        it = zip(range(start, stop, rows), range(start + rows, stop, rows))
-    return [np.s_[i:j:step] for i, j in it if j <= stop]
+    Raises:
+        TypeError: If the input tensor is not a numpy array or a PyTorch tensor.
+    """
+    if not isinstance(x, (np.ndarray, torch.Tensor)):
+        raise TypeError("Input tensor must be a numpy array or a PyTorch tensor.")
+    return (x - x.min()) / (x.max() - x.min())  # type: ignore
 
 
-def square_space(in_size: int, out_size: int) -> tuple[Pair[Array[Nd[N], Any]], Pair[Array[Nd[N, N], Any]]]:
+def normalized_scale(x: TensorT, rate: float = 1.0) -> TensorT:
+    """
+    Scales the input tensor `x` by a factor of `rate` after normalizing it.
+
+    Args:
+        x (numpy.ndarray or torch.Tensor): The input tensor to be normalized and scaled.
+        rate (float, optional): The scaling factor. Defaults to 1.0.
+
+    Returns:
+        numpy.ndarray or torch.Tensor: The normalized and scaled tensor.
+    """
+    x = normalize(x)
+    x *= rate
+    x += 1
+    return x
+    # return (normalize(x) * rate) + 1
+
+
+def log_scale(x: NDArray[np.float_], rate: float = 1.0) -> NDArray[np.float_]:
+    return normalized_scale(np.log(x))
+
+
+def sort_unique(x: SequenceLike[T]) -> NDArray[T]:
+    return np.sort(np.unique(np.asanyarray(x)))
+
+
+def square_space(in_size: int, out_size: int) -> tuple[Pair[Array[[N], Any]], Pair[Array[[N, N], Any]]]:
     """
     >>> points, values = squarespace(4, 6)
     >>> points
@@ -171,11 +141,11 @@ def square_space(in_size: int, out_size: int) -> tuple[Pair[Array[Nd[N], Any]], 
 
 
 def interp_frames(
-    arr: Array[Nd[N, N, ...], AnyT],  # type: ignore
+    arr: Array[[N, N, ...], T],
     *,
     img_size: int = 256,
     method: str = "linear",
-) -> Array[Nd[N, N, ...], AnyT]:  # type: ignore
+) -> Array[Nd[N, N, ...], T]:  # type: ignore
     """
     Interpolate the first two equally shaped dimensions of an array to the new `patch_size`.
     using `scipy.interpolate.RegularGridInterpolator`.
@@ -212,7 +182,109 @@ def url_join(url: str, *args: str, allow_fragments: bool = True) -> str:
 
 
 # =====================================================================================================================
-# - basic IO functions
+# - repr utils
+# =====================================================================================================================
+_array2string = lambda x: np.array2string(
+    x,
+    max_line_width=72,
+    precision=2,
+    separator=" ",
+    floatmode="fixed",
+)
+
+
+def indent_pair(k: str, v: Any, l_pad: int, prefix="  ") -> str:
+    if isinstance(v, np.ndarray):
+        v = _array2string(v)
+    return textwrap.indent(f"{k.rjust(l_pad)}: {v}", prefix=prefix)
+
+
+def indent_kv(*args: tuple[str, Any], prefix="  ") -> list[str]:
+    l_pad = max(len(k) for k, _ in args)
+
+    return [indent_pair(k, v, l_pad, prefix) for k, v in args]
+
+
+# =====================================================================================================================
+# - list utils
+# =====================================================================================================================
+def frozen_list(item: Sequence[_T1]) -> list[_T1]:
+    fl = FrozenList(item)
+    fl.freeze()
+    return fl  # type: ignore
+
+
+def arange_slice(
+    start: int, stop: int | None, rows: int | None, ppad: int | None, step: int | None = None
+) -> list[slice]:
+    if stop is None:
+        start, stop = 0, start
+    if ppad == 0:
+        ppad = None
+    elif stop < start:
+        raise ValueError(f"stop ({stop}) must be less than start ({start})")
+
+    stop += 1  # stop is exclusive
+
+    if rows is None:
+        rows = 1
+
+    if ppad is not None:
+        if ppad > rows:
+            raise ValueError(f"pad ({ppad}) must be less than freq ({rows})")
+        it = zip(range(start, stop, rows // ppad), range(start + rows, stop, rows // ppad))
+    else:
+        it = zip(range(start, stop, rows), range(start + rows, stop, rows))
+    return [np.s_[i:j:step] for i, j in it if j <= stop]
+
+
+# =====================================================================================================================
+# - mapping utils
+# =====================================================================================================================
+def nested_proxy(data: Mapping) -> types.MappingProxyType[str, Any]:
+    return types.MappingProxyType({k: nested_proxy(v) if isinstance(v, Mapping) else v for k, v in data.items()})
+
+
+# =====================================================================================================================
+# - iterable utils
+# =====================================================================================================================
+
+
+def better_iter(x: _T1 | Iterable[_T1]) -> Iterator[_T1]:
+    """
+
+    >>> list(better_iter((1,2,3,4)))
+    [1, 2, 3, 4]
+    >>> list(better_iter('hello'))
+    ['hello']
+    >>> list(better_iter(['hello', 'world']))
+    ['hello', 'world']
+    """
+    if not isinstance(x, Iterable):
+        raise TypeError(f"expected an iterable, but got {type(x)}")
+    return iter([x] if isinstance(x, str) else x)  # type: ignore
+
+
+def find(func: Callable[[_T1], bool], x: Iterable[_T1]) -> _T1:
+    try:
+        return next(filter(func, x))
+    except StopIteration as e:
+        raise ValueError(f"no element in {x} satisfies {func}") from e
+
+
+def squish_map(func: Callable[[_T1], _T2], __iterable: _T1 | Iterable[_T1], *args: _T1) -> map[_T2]:
+    """
+    >>> assert list(squish_map(lambda x: x, "foo", "bar", "baz")) == ["foo", "bar", "baz"]
+    >>> assert list(squish_map(str, range(3), 4, 5)) == ["0", "1", "2", "4", "5"]
+    >>> assert list(squish_map("hello {}".format, (x for x in ("foo", "bar")), "spam")) == ["hello foo", "hello bar", "hello spam"]
+    """
+
+    return map(func, itertools.chain(better_iter(__iterable), iter(args)))
+
+
+# =====================================================================================================================
+# - IO utils
+# =====================================================================================================================
 def dump_toml(obj: Any, src: StrPath, preserve=True, numpy: bool = False) -> None:
     with open(src, "w") as f:
         toml.dump(
@@ -246,11 +318,3 @@ def iter_jsonl(src: StrPath) -> Iterable[Any]:
     with open(src, "r") as f:
         for line in f:
             yield json.loads(line)
-
-
-def indent_kv(*args: tuple[str, Any], prefix="  ") -> list[str]:
-    return [textwrap.indent(f"{k}: {v}", prefix=prefix) for k, v in args]
-
-
-def nested_proxy(data: Mapping) -> types.MappingProxyType[str, Any]:
-    return types.MappingProxyType({k: nested_proxy(v) if isinstance(v, Mapping) else v for k, v in data.items()})
