@@ -66,8 +66,22 @@ def normalize(x: torch.Tensor) -> torch.Tensor:
     ...
 
 
-def normalize(x: torch.Tensor | NDArray[np.number], **kwargs) -> NDArray[np.float32] | torch.Tensor:
+def normalize(x: NDArray[np.number] | torch.Tensor, **kwargs) -> NDArray[np.float_] | torch.Tensor:
     return x - x.min(**kwargs) / (x.max(**kwargs) - x.min(**kwargs))  # type: ignore
+
+
+@overload
+def scale(x: NDArray[np.number], rate: float = ...) -> NDArray[np.float_]:
+    ...
+
+
+@overload
+def scale(x: torch.Tensor, rate: float = ...) -> torch.Tensor:
+    ...
+
+
+def scale(x: NDArray[np.number] | torch.Tensor, rate: float = 1.0) -> NDArray[np.float_] | torch.Tensor:
+    return normalize(x) * rate + 1
 
 
 # =====================================================================================================================
