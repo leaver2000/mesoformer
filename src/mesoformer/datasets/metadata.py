@@ -57,9 +57,6 @@ class DatasetMetadata:
     @classmethod
     def from_title(cls, title: str) -> DatasetMetadata:
         md = get_dataset(title)
-        # title = title.upper()
-        # datasets = load_toml(CONFIG_FILE)["datasets"]  # type: list[dict[str, Any]]
-        # md = find(lambda x: x["title"] == title, datasets)
         crs = pyproj.CRS.from_cf(md.pop("crs"))
         variables = nested_proxy({dvar["standard_name"]: dvar for dvar in md.pop("variables")})
 

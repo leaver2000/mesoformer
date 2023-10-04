@@ -45,18 +45,14 @@ from .typing import (
     Nd,
     NDArray,
     Pair,
-    ParamSpec,
     Sequence,
     StrPath,
     TypeVar,
     overload,
 )
 
-T1 = TypeVar("T1")
-T2 = TypeVar("T2")
-T = TypeVar("T")
-P = ParamSpec("P")
-FloatingDTypeT = TypeVar("FloatingDTypeT", bound=np.floating, covariant=True)
+_T1 = TypeVar("_T1")
+_T2 = TypeVar("_T2")
 
 
 @overload
@@ -73,14 +69,14 @@ def normalize(x: torch.Tensor | NDArray[np.number], **kwargs) -> NDArray[np.floa
     return x - x.min(**kwargs) / (x.max(**kwargs) - x.min(**kwargs))  # type: ignore
 
 
-def find(func: Callable[[T], bool], x: Iterable[T]) -> T:
+def find(func: Callable[[_T1], bool], x: Iterable[_T1]) -> _T1:
     try:
         return next(filter(func, x))
     except StopIteration as e:
         raise ValueError(f"no element in {x} satisfies {func}") from e
 
 
-def iter_not_strings(x: T1 | Iterable[T1]) -> Iterable[T1]:
+def iter_not_strings(x: _T1 | Iterable[_T1]) -> Iterable[_T1]:
     """
     >>> list(iter_not_strings(None))
     [None]
@@ -94,7 +90,7 @@ def iter_not_strings(x: T1 | Iterable[T1]) -> Iterable[T1]:
     return iter([x] if isinstance(x, str) or not isinstance(x, Iterable) else x)  # type: ignore
 
 
-def squish_map(func: Callable[[T1], T2], __iterable: T1 | Iterable[T1], *args: T1) -> map[T2]:
+def squish_map(func: Callable[[_T1], _T2], __iterable: _T1 | Iterable[_T1], *args: _T1) -> map[_T2]:
     """
     >>> assert list(squish_map(lambda x: x, "foo", "bar", "baz")) == ["foo", "bar", "baz"]
     >>> assert list(squish_map(str, range(3), 4, 5)) == ["0", "1", "2", "4", "5"]
@@ -105,7 +101,7 @@ def squish_map(func: Callable[[T1], T2], __iterable: T1 | Iterable[T1], *args: T
 
 
 # =====================================================================================================================
-def frozen_list(item: Sequence[T]) -> list[T]:
+def frozen_list(item: Sequence[_T1]) -> list[_T1]:
     fl = FrozenList(item)
     fl.freeze()
     return fl  # type: ignore
