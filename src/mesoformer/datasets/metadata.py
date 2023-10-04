@@ -3,7 +3,7 @@ from __future__ import annotations
 __all__ = [
     # - ERA5
     "ERA5Enum",
-    "ERA5_CHANNELS",
+    "ERA5_VARS",
     "GEOPOTENTIAL",
     "SPECIFIC_HUMIDITY",
     "TEMPERATURE",
@@ -12,7 +12,7 @@ __all__ = [
     "VERTICAL_VELOCITY",
     # - URMA
     "URMAEnum",
-    "URMA_CHANNELS",
+    "URMA_VARS",
     "CEILING",
     "DEWPOINT_TEMPERATURE_2M",
     "OROGRAPHY",
@@ -196,7 +196,7 @@ class ERA5Enum(CFDatasetEnum, title="ERA5"):
     W = "vertical_velocity"
 
 
-ERA5_CHANNELS = (
+ERA5_VARS = (
     GEOPOTENTIAL,
     SPECIFIC_HUMIDITY,
     TEMPERATURE,
@@ -247,7 +247,7 @@ class URMAEnum(CFDatasetEnum, title="URMA"):
     OROG = "orography"
 
 
-URMA_CHANNELS = (
+URMA_VARS = (
     TOTAL_CLOUD_COVER,
     CEILING,
     U_WIND_COMPONENT_10M,
