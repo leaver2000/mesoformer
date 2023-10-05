@@ -257,8 +257,8 @@ units = "hours since 1900-01-01 00:00:00.0"
 
 [[datasets.coordinates]]
 short_name = "level"
-long_name = "initial time of forecast"
-standard_name = "air_pressure"
+long_name = "air pressure"
+standard_name = "level"
 stored_direction = 'decreasing'
 units = "hPa"
 

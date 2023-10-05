@@ -28,12 +28,57 @@ from .typing import (  # T,; P,
     Sequence,
     T,
     TypeVar,
+    EnumT,
+    overload,
 )
-from .utils import indent_kv
+import enum
+from .utils import indent_kv, squish_map
 
 K = TypeVar("K", bound=Hashable)
 S = TypeVar("S")
 P = ParamSpec("P")
+
+
+# =====================================================================================================================
+class EnumMetaBase(enum.EnumMeta):
+    @overload
+    def __call__(cls: type[EnumT], __item: str) -> EnumT:
+        ...
+
+    @overload
+    def __call__(cls: type[EnumT], __item: Iterable[Any], *args: Any) -> list[EnumT]:
+        ...
+
+    def __call__(cls: type[EnumT], __item: Iterable[Any], *args: Any) -> EnumT | list[EnumT]:
+        if isinstance(__item, cls.__mro__[:-1]) and not args:
+            return super().__call__(__item)
+
+        return list(squish_map(super().__call__, __item, *args))
+
+    def map(cls, dims: Iterable[Hashable]) -> Mapping[Hashable, Self]:
+        return {dim: cls(dim) for dim in map(str, dims)}
+
+    @property
+    def set_(cls) -> set[Self]:
+        return set(cls)
+
+    def difference(cls, other: Iterable[Any]) -> set[Self]:
+        return cls.set_.difference(other)
+
+
+class StrEnum(str, enum.Enum):
+    def __str__(self) -> str:
+        return str(self.value)
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}[{self.value!r}]"
+
+    @classmethod
+    def _missing_(cls, key: Any) -> Self:
+        return cls._member_map_[str(key).upper()]  # type: ignore
+
+
+# =====================================================================================================================
 
 
 class Data(Generic[T], abc.ABC):
@@ -67,9 +112,6 @@ class DataMapping(Mapping[K, T], Data[T]):
 
     def __len__(self) -> int:
         return len(self._data)
-
-    # def to_dict(self) -> dict[K, T]:
-    #     return dict(self)
 
 
 class DataWorker(Mapping[K, T]):

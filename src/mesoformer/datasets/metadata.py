@@ -37,14 +37,72 @@ import types
 
 import pandas as pd
 import pyproj
-
+from typing import Mapping, Hashable
+import abc
 from ..config import get_dataset
-from ..typing import Any, EnumT, Iterable, Self, overload
+from ..typing import Any, EnumT, Iterable, Self, overload, Literal, TypeAlias
 from ..utils import indent_kv, nested_proxy, squish_map
+from ..generic import Data, DataMapping, EnumMetaBase, StrEnum
+
+# from src.mesoformer.generic import StrEnum, EnumMetaBase
+LiteralOrder: TypeAlias = """tuple[
+    Literal[OrderedDims.TIME],
+    Literal[OrderedDims.LEVEL],
+    Literal[OrderedDims.LATITUDE],
+    Literal[OrderedDims.LONGITUDE],
+]"""
+
+
+class OrderedDims(StrEnum, metaclass=EnumMetaBase):
+    TIME = "t"
+    LEVEL = "z"
+    LATITUDE = "y"
+    LONGITUDE = "x"
+
+    @classmethod
+    @property
+    def order(cls) -> LiteralOrder:
+        return ORDERED_DIMS
+
+
+ORDERED_DIMS = T, Z, Y, X = (
+    OrderedDims.TIME,
+    OrderedDims.LEVEL,
+    OrderedDims.LATITUDE,
+    OrderedDims.LONGITUDE,
+)
+
+
+class MetadataMixin(Data[Any], abc.ABC):
+    __ordered_dims = OrderedDims
+
+    @property
+    def dims(self) -> type[OrderedDims]:
+        return self.__ordered_dims
+
+    @property
+    @abc.abstractmethod
+    def metadata(self) -> DatasetMetadata:
+        ...
+
+    @property
+    def md(cls) -> DatasetMetadata:
+        return cls.metadata
+
+    @property
+    def crs(cls) -> pyproj.CRS:
+        return cls.metadata.crs
+
+    @property
+    def data(self):
+        return self.metadata.data
+
+    def get_coords(self) -> list[Hashable]:
+        return [coord["standard_name"] for coord in self.metadata.coordinates]
 
 
 @dataclasses.dataclass(frozen=True, repr=False)
-class DatasetMetadata:
+class DatasetMetadata(Data[Any]):
     title: str
     institution: str
     source: str
@@ -62,17 +120,17 @@ class DatasetMetadata:
 
         return cls(**md, variables=variables, crs=crs)
 
-    def __repr__(self) -> str:
-        content = indent_kv(
+    @property
+    def data(self) -> Iterable[tuple[str, Any]]:
+        yield from [
             ("title", self.title),
             ("institution", self.institution),
             ("source", self.source),
             ("history", self.history),
             ("comment", self.comment),
             ("coordinates", self.coordinates),
-            ("crs", textwrap.indent(repr(self.crs), "  ").strip()),
-        )
-        return "\n".join([f"{self.__class__.__name__}:"] + content)
+            ("crs", "\n" + textwrap.indent(repr(self.crs), "  ").strip()),
+        ]
 
     def to_dataframe(self) -> pd.DataFrame:
         columns = [
@@ -88,7 +146,14 @@ class DatasetMetadata:
         return pd.DataFrame(list(self.variables.values()))[columns]
 
 
-class CFDatasetEnumMeta(enum.EnumMeta):
+class CFDatasetEnumMeta(MetadataMixin, EnumMetaBase):
+    """
+    A metaclass for creating Enum classes that have associated metadata.
+
+    Attributes:
+        _metadata_: An instance of DatasetMetadata that contains metadata for the Enum class.
+    """
+
     _metadata_: DatasetMetadata
 
     def __new__(cls, name: str, bases: tuple[Any, ...], kwargs, title: str | None = None) -> Self:
@@ -98,48 +163,32 @@ class CFDatasetEnumMeta(enum.EnumMeta):
 
         return obj
 
-    @overload
-    def __call__(cls: type[EnumT], __item: str) -> EnumT:
-        ...
-
-    @overload
-    def __call__(cls: type[EnumT], __item: Iterable[Any], *args: Any) -> list[EnumT]:
-        ...
-
-    def __call__(cls: type[EnumT], __item: Iterable[Any], *args: Any) -> EnumT | list[EnumT]:
-        if isinstance(__item, cls.__mro__[:-1]) and not args:
-            return super().__call__(__item)
-
-        return list(squish_map(super().__call__, __item, *args))
-
     @property
-    def md(cls) -> DatasetMetadata:
+    def metadata(cls) -> DatasetMetadata:
+        """
+        Returns the metadata associated with the Enum class.
+
+        Returns:
+            An instance of DatasetMetadata that contains metadata for the Enum class.
+        """
         return cls._metadata_
 
-    @property
-    def crs(cls) -> pyproj.CRS:
-        return cls._metadata_.crs
+    def to_dataframe(cls) -> pd.DataFrame:
+        """
+        Returns a pandas DataFrame containing the metadata for the Enum class.
 
-    def to_dataframe(cls):
+        Returns:
+            A pandas DataFrame containing the metadata for the Enum class.
+        """
         df = cls.md.to_dataframe()
         df.index = pd.Index(df["standard_name"].map(lambda x: cls(x).name).rename("member_name"))
 
         return df
 
 
-class CFDatasetEnum(str, enum.Enum, metaclass=CFDatasetEnumMeta):
-    def __str__(self) -> str:
-        return str(self.value)
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}.{self.name}"
-
-    @classmethod
-    def _missing_(cls, key: Any) -> Self:
-        return cls._member_map_[str(key).upper()]  # type: ignore
-
+class CFDatasetEnum(StrEnum, metaclass=CFDatasetEnumMeta):
     @property
-    def md(self) -> types.MappingProxyType[str, Any]:
+    def dvars(self) -> types.MappingProxyType[str, Any]:
         return self._metadata_.variables[self]
 
     @property
@@ -148,31 +197,31 @@ class CFDatasetEnum(str, enum.Enum, metaclass=CFDatasetEnumMeta):
 
     @property
     def short_name(self) -> str:
-        return self.md["short_name"]
+        return self.dvars["short_name"]
 
     @property
     def standard_name(self) -> str:
-        return self.md["standard_name"]
+        return self.dvars["standard_name"]
 
     @property
     def long_name(self) -> str:
-        return self.md["long_name"]
+        return self.dvars["long_name"]
 
     @property
     def units(self) -> str:
-        return self.md["units"]
+        return self.dvars["units"]
 
     @property
     def type_of_level(self) -> str:
-        return self.md["type_of_level"]
+        return self.dvars["type_of_level"]
 
     @property
     def level(self) -> int:
-        return self.md["level"]
+        return self.dvars["level"]
 
     @property
     def description(self) -> str:
-        return self.md["description"]
+        return self.dvars["description"]
 
 
 # =====================================================================================================================
