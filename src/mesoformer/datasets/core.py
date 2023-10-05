@@ -39,11 +39,11 @@ class Mesoscale(Contents[NDArray[np.float_]]):
     ) -> None:
         super().__init__()
         self._tropo = tropo = sort_unique(troposphere)[::-1] if troposphere is not None else arange_troposphere() # descending pressure
-        self._hpa = hpa = sort_unique(pressure)[::-1]
+        self._hpa = hpa = sort_unique(pressure)[::-1] # descending pressure
 
         mask = np.isin(tropo, hpa)
-        self._scale = scale = log_scale(tropo, rate=rate)[::-1][mask]
-        self._dx, self._dy = scale[np.newaxis] * np.array([[dx], [dy or dx]])
+        self._scale = scale = log_scale(tropo, rate=rate)[::-1][mask] # acending scale
+        self._dx, self._dy = scale[np.newaxis] * np.array([[dx], [dy or dx]]) # ascending scale
 
     @property
     def hpa(self) -> NDArray[np.float_]:

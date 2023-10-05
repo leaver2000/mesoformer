@@ -80,7 +80,7 @@ else:
 
 P = ParamSpec("P")
 if TYPE_CHECKING:
-    from numpy._typing._nested_sequence import _NestedSequence
+    from numpy._typing._nested_sequence import _NestedSequence as NestedSequence
 
     from ._typing._tensor import TensorLike  # pyright: ignore
 
@@ -89,20 +89,19 @@ if TYPE_CHECKING:
 
 else:
     TensorLike = Callable
-    _NestedSequence: TypeAlias = Sequence
+    NestedSequence: TypeAlias = "Sequence[T | NestedSequence[T]]"
     nd = tuple
 # =====================================================================================================================
 T = TypeVar("T", bound=Any)
 T_co = TypeVar("T_co", bound=Any, covariant=True)
 T_contra = TypeVar("T_contra", bound=Any, contravariant=True)
 Ts = TypeVarTuple("Ts")
+
 NDArray: TypeAlias = _NDArray[T_co] | _NDArray[Any]
 
-
 EnumT = TypeVar("EnumT", bound="EnumProtocol")
-Number = Union[int, float, bool, np.number, np.bool_]
-
-NestedSequence: TypeAlias = _NestedSequence[T]
+Boolean: TypeAlias = bool | np.bool_
+Number: TypeAlias = Union[int, float, np.number]
 SequenceLike: TypeAlias = "NestedSequence[T] | TensorLike[..., T] | NDArray[T]"
 
 
