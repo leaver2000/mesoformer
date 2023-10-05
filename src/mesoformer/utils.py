@@ -17,13 +17,14 @@ __all__ = [
     "load_toml",
     "tqdm",
 ]
+import functools
 import itertools
 import json
 import textwrap
 import types
 import urllib.parse
 from collections.abc import Sequence
-import functools
+
 import numpy as np
 import toml
 import torch

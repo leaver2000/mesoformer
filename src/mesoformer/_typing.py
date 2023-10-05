@@ -11,13 +11,11 @@ __all__ = [
 ]
 import typing
 
-
 if typing.TYPE_CHECKING:
     import numpy as np
     import pandas as pd
     import torch
     from numpy._typing._nested_sequence import _NestedSequence as NestedSequence
-
     from pandas.core.arrays.base import ExtensionArray
 
     _P = typing.ParamSpec("_P")

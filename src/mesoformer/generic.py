@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import abc
+import enum
 import queue
 import random
 import threading
@@ -14,6 +15,7 @@ from .typing import (  # T,; P,
     ArrayLike,
     Concatenate,
     DictStrAny,
+    EnumT,
     Final,
     Generic,
     Hashable,
@@ -28,10 +30,8 @@ from .typing import (  # T,; P,
     Sequence,
     T,
     TypeVar,
-    EnumT,
     overload,
 )
-import enum
 from .utils import indent_kv, squish_map
 
 K = TypeVar("K", bound=Hashable)

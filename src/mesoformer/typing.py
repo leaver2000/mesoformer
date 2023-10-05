@@ -71,10 +71,18 @@ from typing import (
 
 import numpy as np
 import pandas as pd
-
 from pandas._typing import Scalar
 
-from ._typing import AnyArrayLike, Array, ArrayLike, ListLike, Nd, NestedSequence, TensorLike, NDArray
+from ._typing import (
+    AnyArrayLike,
+    Array,
+    ArrayLike,
+    ListLike,
+    Nd,
+    NDArray,
+    NestedSequence,
+    TensorLike,
+)
 
 if sys.version_info <= (3, 9):
     from typing_extensions import ParamSpec, Self, TypeAlias, TypeVarTuple, Unpack

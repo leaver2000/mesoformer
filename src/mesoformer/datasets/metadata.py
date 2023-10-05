@@ -30,75 +30,19 @@ __all__ = [
 ]
 
 
+import abc
 import dataclasses
-import enum
 import textwrap
 import types
+from typing import Hashable
 
 import pandas as pd
 import pyproj
-from typing import Mapping, Hashable
-import abc
+
 from ..config import get_dataset
-from ..typing import Any, EnumT, Iterable, Self, overload, Literal, TypeAlias
-from ..utils import indent_kv, nested_proxy, squish_map
-from ..generic import Data, DataMapping, EnumMetaBase, StrEnum
-
-# from src.mesoformer.generic import StrEnum, EnumMetaBase
-LiteralOrder: TypeAlias = """tuple[
-    Literal[OrderedDims.TIME],
-    Literal[OrderedDims.LEVEL],
-    Literal[OrderedDims.LATITUDE],
-    Literal[OrderedDims.LONGITUDE],
-]"""
-
-
-class OrderedDims(StrEnum, metaclass=EnumMetaBase):
-    TIME = "t"
-    LEVEL = "z"
-    LATITUDE = "y"
-    LONGITUDE = "x"
-
-    @classmethod
-    @property
-    def order(cls) -> LiteralOrder:
-        return ORDERED_DIMS
-
-
-ORDERED_DIMS = T, Z, Y, X = (
-    OrderedDims.TIME,
-    OrderedDims.LEVEL,
-    OrderedDims.LATITUDE,
-    OrderedDims.LONGITUDE,
-)
-
-
-class MetadataMixin(Data[Any], abc.ABC):
-    __ordered_dims = OrderedDims
-
-    @property
-    def dims(self) -> type[OrderedDims]:
-        return self.__ordered_dims
-
-    @property
-    @abc.abstractmethod
-    def metadata(self) -> DatasetMetadata:
-        ...
-
-    @property
-    def md(cls) -> DatasetMetadata:
-        return cls.metadata
-
-    @property
-    def crs(cls) -> pyproj.CRS:
-        return cls.metadata.crs
-
-    @property
-    def data(self):
-        return self.metadata.data
-
-    def get_coords(self) -> list[Hashable]:
-        return [coord["standard_name"] for coord in self.metadata.coordinates]
+from ..generic import Data, EnumMetaBase, StrEnum
+from ..typing import Any, Iterable, Self, TypeAlias, Literal
+from ..utils import nested_proxy
 
 
 @dataclasses.dataclass(frozen=True, repr=False)
@@ -144,6 +88,60 @@ class DatasetMetadata(Data[Any]):
             "units",
         ]
         return pd.DataFrame(list(self.variables.values()))[columns]
+
+
+class OrderedDims(StrEnum, metaclass=EnumMetaBase):
+    TIME = "t"
+    LEVEL = "z"
+    LATITUDE = "y"
+    LONGITUDE = "x"
+
+    @classmethod
+    @property
+    def order(cls) -> LiteralOrder:
+        return ORDERED_DIMS
+
+
+LiteralOrder: TypeAlias = tuple[
+    Literal[OrderedDims.TIME],
+    Literal[OrderedDims.LEVEL],
+    Literal[OrderedDims.LATITUDE],
+    Literal[OrderedDims.LONGITUDE],
+]
+ORDERED_DIMS = T, Z, Y, X = (
+    OrderedDims.TIME,
+    OrderedDims.LEVEL,
+    OrderedDims.LATITUDE,
+    OrderedDims.LONGITUDE,
+)
+
+
+class MetadataMixin(Data[Any], abc.ABC):
+    @property
+    @abc.abstractmethod
+    def metadata(self) -> DatasetMetadata:
+        ...
+
+    __ordered_dims = OrderedDims
+
+    @property
+    def dims(self) -> type[OrderedDims]:
+        return self.__ordered_dims
+
+    @property
+    def md(cls) -> DatasetMetadata:
+        return cls.metadata
+
+    @property
+    def crs(cls) -> pyproj.CRS:
+        return cls.metadata.crs
+
+    @property
+    def data(self):
+        return self.metadata.data
+
+    def get_coords(self) -> list[Hashable]:
+        return [coord["standard_name"] for coord in self.metadata.coordinates]
 
 
 class CFDatasetEnumMeta(MetadataMixin, EnumMetaBase):
