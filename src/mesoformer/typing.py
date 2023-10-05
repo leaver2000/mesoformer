@@ -31,7 +31,16 @@ __all__ = [
     "Scalar",
     "Hashable",
     "Literal",
+    "AnyArrayLike",
+    "Array",
+    "ArrayLike",
+    "ListLike",
+    "Nd",
+    "NestedSequence",
+    "TensorLike",
+    "Sequence",
 ]
+import datetime
 import os
 import sys
 from typing import (
@@ -61,9 +70,11 @@ from typing import (
 )
 
 import numpy as np
-from numpy.typing import ArrayLike
-from numpy.typing import NDArray as _NDArray
+import pandas as pd
+
 from pandas._typing import Scalar
+
+from ._typing import AnyArrayLike, Array, ArrayLike, ListLike, Nd, NestedSequence, TensorLike, NDArray
 
 if sys.version_info <= (3, 9):
     from typing_extensions import ParamSpec, Self, TypeAlias, TypeVarTuple, Unpack
@@ -78,36 +89,28 @@ else:
     from types import EllipsisType
     from typing import ParamSpec, Self, TypeAlias, TypeVarTuple, Unpack
 
-P = ParamSpec("P")
-if TYPE_CHECKING:
-    from numpy._typing._nested_sequence import _NestedSequence as NestedSequence
-
-    from ._typing._tensor import TensorLike  # pyright: ignore
-
-    class nd(Concatenate[P]):
-        ...
-
-else:
-    TensorLike = Callable
-    NestedSequence: TypeAlias = "Sequence[T | NestedSequence[T]]"
-    nd = tuple
 # =====================================================================================================================
+N = NewType("N", Any)
+P = ParamSpec("P")
 T = TypeVar("T", bound=Any)
 T_co = TypeVar("T_co", bound=Any, covariant=True)
 T_contra = TypeVar("T_contra", bound=Any, contravariant=True)
-Ts = TypeVarTuple("Ts")
 
-NDArray: TypeAlias = _NDArray[T_co] | _NDArray[Any]
-
+# NDArray = Array[..., NumpyT_co]
 EnumT = TypeVar("EnumT", bound="EnumProtocol")
+#
+# Number: TypeAlias = "Union[int, float]"
+Number: TypeAlias = int | float | np.number[Any]
 Boolean: TypeAlias = bool | np.bool_
-Number: TypeAlias = Union[int, float, np.number]
-SequenceLike: TypeAlias = "NestedSequence[T] | TensorLike[..., T] | NDArray[T]"
+NumberT = TypeVar("NumberT", int, float, np.number[Any])
 
+
+PythonScalar = Union[str, float, bool]
+DatetimeLikeScalar = Union["pd.Period", "pd.Timestamp", "pd.Timedelta"]
+PandasScalar = Union["pd.Period", "pd.Timestamp", "pd.Timedelta", "pd.Interval"]
+Scalar = Union[PythonScalar, PandasScalar, np.datetime64, np.timedelta64, datetime.date]
 
 Pair: TypeAlias = tuple[T, T]
-
-
 DictStr: TypeAlias = dict[str, T]
 DictStrAny: TypeAlias = DictStr[Any]
 StrPath: TypeAlias = "str | os.PathLike[str]"
@@ -151,10 +154,3 @@ class EnumProtocol(Protocol[T]):
     @classmethod
     def __call__(cls, value: Any) -> Self:
         ...
-
-
-N = NewType("N", int)
-
-
-Array = np.ndarray[nd[P], T_contra] | NDArray[T_contra]
-""">>> x: Array[[N], np.int_] = np.array([1, 2, 3]) # Array[(N), int]"""

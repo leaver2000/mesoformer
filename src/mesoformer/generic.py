@@ -36,24 +36,28 @@ S = TypeVar("S")
 P = ParamSpec("P")
 
 
-class Contents(Generic[T], abc.ABC):
+class Data(Generic[T], abc.ABC):
     @property
     @abc.abstractmethod
-    def content(self) -> Iterable[tuple[str, T]]:
+    def data(self) -> Iterable[tuple[str, T]]:
         ...
 
     def to_dict(self) -> dict[str, T]:
-        return dict(self.content)
+        return dict(self.data)
 
     def __repr__(self) -> str:
-        content = indent_kv(*self.content)
-        return "\n".join([f"{self.__class__.__name__}:"] + content)
+        data = indent_kv(*self.data)
+        return "\n".join([f"{self.__class__.__name__}:"] + data)
 
 
-class DataMapping(Mapping[K, T]):
+class DataMapping(Mapping[K, T], Data[T]):
     def __init__(self, data: Mapping[K, T]) -> None:
         super().__init__()
         self._data: Final[Mapping[K, T]] = data
+
+    @property
+    def data(self) -> Iterable[tuple[K, T]]:
+        yield from self.items()
 
     def __getitem__(self, key: K) -> T:
         return self._data[key]
@@ -64,8 +68,8 @@ class DataMapping(Mapping[K, T]):
     def __len__(self) -> int:
         return len(self._data)
 
-    def to_dict(self) -> dict[K, T]:
-        return dict(self)
+    # def to_dict(self) -> dict[K, T]:
+    #     return dict(self)
 
 
 class DataWorker(Mapping[K, T]):

@@ -23,7 +23,7 @@ import textwrap
 import types
 import urllib.parse
 from collections.abc import Sequence
-
+import functools
 import numpy as np
 import toml
 import torch
@@ -36,21 +36,20 @@ try:
 except NameError:
     import tqdm
 
-from .typing import (  # Array,; Nd,
+from .typing import (
     Any,
     Array,
     Callable,
     Iterable,
     Iterator,
+    ListLike,
     Mapping,
     N,
     NDArray,
     Pair,
     Sequence,
-    SequenceLike,
     StrPath,
     T,
-    TensorLike,
     TypeVar,
 )
 
@@ -58,14 +57,15 @@ _T1 = TypeVar("_T1")
 _T2 = TypeVar("_T2")
 
 T_co = TypeVar("T_co", covariant=True)
+T_contra = TypeVar("T_contra", contravariant=True)
 
-TensorT = TypeVar("TensorT", bound=TensorLike)
+TensorT = TypeVar("TensorT", torch.Tensor, Array[..., Any])
 
 
 # =====================================================================================================================
 # - array/tensor utils
 # =====================================================================================================================
-def normalize(x: TensorT, **kwargs) -> TensorT:
+def normalize(x: TensorT) -> TensorT:
     """
     Normalize the input tensor along the specified dimensions.
 
@@ -98,14 +98,33 @@ def normalized_scale(x: TensorT, rate: float = 1.0) -> TensorT:
     x = normalize(x)
     x *= rate
     x += 1
+
     return x
 
 
-def log_scale(x: NDArray[np.float_], rate: float = 1.0) -> NDArray[np.float_]:
+def log_scale(x: NDArray[np.number], rate: float = 1.0) -> NDArray[np.float_]:
     return normalized_scale(np.log(x), rate=rate)
 
 
-def sort_unique(x: SequenceLike[T]) -> NDArray[T]:
+def sort_unique(x: ListLike[T]) -> NDArray[T]:
+    """
+    Sorts the elements of the input array `x` in ascending order and removes any duplicates.
+
+    Parameters
+    ----------
+    x : ListLike[T]
+        The input array to be sorted and made unique.
+
+    Returns
+    -------
+    NDArray[T]
+        A new array containing the sorted, unique elements of `x`.
+
+    Examples
+    --------
+    >>> sort_unique([3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5])
+    array([1, 2, 3, 4, 5, 6, 9])
+    """
     return np.sort(np.unique(np.asanyarray(x)))
 
 
@@ -152,7 +171,7 @@ def interp_frames(
     if x != y:  # first two dimensions must be equal
         raise ValueError(f"array must be square, but got shape: {arr.shape}")
     elif x == img_size == y:  # no interpolation needed
-        return arr
+        return arr  # type: ignore
     points, values = square_space(x, img_size)
     interp = RegularGridInterpolator(points, arr, method=method)
     return interp(values).astype(arr.dtype)
@@ -172,12 +191,13 @@ def url_join(url: str, *args: str, allow_fragments: bool = True) -> str:
         raise ValueError(f"invalid url: {url}")
     return urllib.parse.urljoin(url, "/".join(x.strip("/") for x in args), allow_fragments=allow_fragments)
 
+    # =====================================================================================================================
+    # - repr utils
+    # =====================================================================================================================
 
-# =====================================================================================================================
-# - repr utils
-# =====================================================================================================================
-_array2string = lambda x: np.array2string(
-    x,
+
+_array2string = functools.partial(
+    np.array2string,
     max_line_width=72,
     precision=2,
     separator=" ",
@@ -233,15 +253,13 @@ def arange_slice(
 # =====================================================================================================================
 # - mapping utils
 # =====================================================================================================================
-def nested_proxy(data: Mapping) -> types.MappingProxyType[str, Any]:
+def nested_proxy(data: Mapping[str, Any]) -> types.MappingProxyType[str, Any]:
     return types.MappingProxyType({k: nested_proxy(v) if isinstance(v, Mapping) else v for k, v in data.items()})
 
 
 # =====================================================================================================================
 # - iterable utils
 # =====================================================================================================================
-
-
 def better_iter(x: _T1 | Iterable[_T1]) -> Iterator[_T1]:
     """
 
