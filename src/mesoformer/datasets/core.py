@@ -23,8 +23,8 @@ def arange_troposphere(
     p0: float = P0,
     p1=P1,
 ) -> NDArray[np.float_]:
-    x = sort_unique([p0, *range(start, stop, step), p1])[::-1]
-    return x.astype(np.float_)
+    x = sort_unique([p0, *range(start, stop, step), p1])[::-1] # descending pressure
+    return x
 
 
 class Mesoscale(Contents[NDArray[np.float_]]):
@@ -32,14 +32,13 @@ class Mesoscale(Contents[NDArray[np.float_]]):
         self,
         dx: float = 200.0,
         dy: float | None = None,
-        km_px: float = URMA_GRID_RESOLUTION,
         *,
         rate: float = 1.0,
         pressure: SequenceLike[Number],
         troposphere: NDArray[np.float_] | None = None,
     ) -> None:
         super().__init__()
-        self._tropo = tropo = sort_unique(troposphere)[::-1] if troposphere is not None else arange_troposphere()
+        self._tropo = tropo = sort_unique(troposphere)[::-1] if troposphere is not None else arange_troposphere() # descending pressure
         self._hpa = hpa = sort_unique(pressure)[::-1]
 
         mask = np.isin(tropo, hpa)

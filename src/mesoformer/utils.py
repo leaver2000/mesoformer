@@ -65,13 +65,6 @@ TensorT = TypeVar("TensorT", bound=TensorLike)
 # =====================================================================================================================
 # - array/tensor utils
 # =====================================================================================================================
-def log_scale(x: NDArray[np.float_], rate: float = 1.0) -> NDArray[np.float_]:
-    x = normalize(np.log(x))
-    x *= rate
-    x += 1
-    return x
-
-
 def normalize(x: TensorT, **kwargs) -> TensorT:
     """
     Normalize the input tensor along the specified dimensions.
@@ -106,11 +99,10 @@ def normalized_scale(x: TensorT, rate: float = 1.0) -> TensorT:
     x *= rate
     x += 1
     return x
-    # return (normalize(x) * rate) + 1
 
 
 def log_scale(x: NDArray[np.float_], rate: float = 1.0) -> NDArray[np.float_]:
-    return normalized_scale(np.log(x))
+    return normalized_scale(np.log(x), rate=rate)
 
 
 def sort_unique(x: SequenceLike[T]) -> NDArray[T]:
