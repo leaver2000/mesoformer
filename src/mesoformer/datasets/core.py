@@ -1,11 +1,29 @@
 from __future__ import annotations
 
+import abc
+
 import numpy as np
 import pandas as pd
+import xarray as xr
+from xarray.core.coordinates import DatasetCoordinates
 
 from ..generic import Data
-from ..typing import Iterable, ListLike, NDArray, Number
+from ..typing import Hashable, Iterable, ListLike, NDArray, Number
 from ..utils import log_scale, sort_unique
+from .metadata import (
+    COORDINATES,
+    DIMENSIONS,
+    LAT,
+    LON,
+    LVL,
+    TIME,
+    Coordinates,
+    Dimensions,
+    T,
+    X,
+    Y,
+    Z,
+)
 
 P0 = 1013.25  # - mbar
 P1 = 25.0  # - mbar
@@ -88,3 +106,109 @@ class Mesoscale(Data[NDArray[np.float_]]):
 
     def to_pandas(self) -> pd.DataFrame:
         return pd.DataFrame(self.to_dict()).set_index("hpa").sort_index()
+
+
+# =====================================================================================================================
+def check_independent_dims(dims: Iterable[Hashable]) -> bool:
+    return tuple(dims) == DIMENSIONS
+
+
+def check_independent_coords(coords: DatasetCoordinates) -> bool:
+    return set(coords) == set(COORDINATES) and all(coords[x].dims == (Y, X) for x in (LON, LAT))
+
+
+def is_independent(ds: xr.Dataset) -> bool:
+    return check_independent_dims(ds.dims) and check_independent_coords(ds.coords)
+
+
+def set_independent(ds: xr.Dataset) -> xr.Dataset:
+    """insures a dependant dataset is in the correct format."""
+    if is_independent(ds):
+        return ds
+
+    # - move any coordinates that may be assigned as variables to coordinates
+    ds = ds.set_coords(Coordinates.intersection(ds.variables))
+
+    # - rename the dims and variables
+    ds = ds.rename_dims(Dimensions.map(ds.dims))
+    ds = ds.rename_vars(Coordinates.map(ds.coords))
+
+    # - Move any coordinates that may be assigned as variables to coordinates
+    lon, lat = (ds[coord].compute() for coord in (LON, LAT))
+    ds[LON] = lon
+    ds[LAT] = lat
+
+    # - dimension assignment
+    if missing := Dimensions.difference(ds.dims):
+        for dim in missing:
+            ds = ds.expand_dims(dim, axis=[DIMENSIONS.index(dim)])
+
+    # - coordinate assignment
+    if missing := Coordinates.difference(ds.coords):
+        ds = ds.assign_coords({coord: (coord.axis, ["derived"]) for coord in missing})
+
+    if ds[LAT].dims == (Y,) and ds[LON].dims == (X,):
+        # 5.2. Two-Dimensional Latitude, Longitude, Coordinate
+        # Variables
+        # The latitude and longitude coordinates of a horizontal grid that was not defined as a Cartesian
+        # product of latitude and longitude axes, can sometimes be represented using two-dimensional
+        # coordinate variables. These variables are identified as coordinates by use of the coordinates
+        # attribute
+        lon, lat = (ds[coord].to_numpy() for coord in (LON, LAT))
+        yy, xx = np.meshgrid(lat, lon, indexing="xy")
+
+        ds = ds.assign_coords({LAT: (LAT.axis, yy), LON: (LON.axis, xx)})
+
+    ds = ds.transpose(*DIMENSIONS)
+    assert is_independent(ds)
+    return ds
+
+
+class IndependentABC(abc.ABC):
+    @property
+    @abc.abstractmethod
+    def ds(self) -> xr.Dataset:
+        ...
+
+    def to_array(self):
+        return self.ds.to_array().transpose(X, Y, ...)
+
+    # - dims
+    @property
+    def t(self) -> xr.DataArray:
+        return self.ds[T]
+
+    @property
+    def z(self) -> xr.DataArray:
+        return self.ds[Z]
+
+    @property
+    def y(self) -> xr.DataArray:
+        return self.ds[Y]
+
+    @property
+    def x(self) -> xr.DataArray:
+        return self.ds[X]
+
+    # - coords
+    @property
+    def time(self) -> xr.DataArray:
+        return self.ds[TIME]
+
+    @property
+    def level(self) -> xr.DataArray:
+        return self.ds[LVL]
+
+    @property
+    def lons(self) -> xr.DataArray:
+        return self.ds[LON]
+
+    @property
+    def lats(self) -> xr.DataArray:
+        return self.ds[LAT]
+
+    def __repr__(self) -> str:
+        return self.ds.__repr__()
+
+    def _repr_html_(self) -> str:
+        return self.ds._repr_html_()

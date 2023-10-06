@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 __all__ = [
-    "AnyArrayLike",
-    "Array",
-    "ArrayLike",
-    "ListLike",
     "Nd",
+    "Array",
+    "ListLike",
+    "ArrayLike",
+    "AnyArrayLike",
     "NestedSequence",
     "TensorLike",
 ]
@@ -21,6 +21,7 @@ if typing.TYPE_CHECKING:
     _P = typing.ParamSpec("_P")
     _T = typing.TypeVar("_T", bound=typing.Any)
     _T_co = typing.TypeVar("_T_co", bound=typing.Any, covariant=True)
+    _T_contra = typing.TypeVar("_T_contra", bound=typing.Any, contravariant=True)
     _NumpyT_co = typing.TypeVar("_NumpyT_co", covariant=True, bound=np.generic)
 
     class Nd(typing.Concatenate[_P]):
@@ -34,6 +35,7 @@ if typing.TYPE_CHECKING:
     List = list[_T | typing.Any]
     ListLike = typing.Union[AnyArrayLike[_T], List[_T]]
     TensorLike = typing.Union[Array[_P, _T_co], NDArray[_T_co], torch.Tensor]
+
 
 else:
     import numpy.typing as npt
