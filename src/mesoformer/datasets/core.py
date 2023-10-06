@@ -164,11 +164,52 @@ def set_independent(ds: xr.Dataset) -> xr.Dataset:
     return ds
 
 
-class IndependentABC(abc.ABC):
+from ..typing import StrPath, Sequence
+from .metadata import MetadataMixin, CFDatasetEnum, DatasetMetadata
+from typing import Final
+
+VariableLike = type[CFDatasetEnum] | CFDatasetEnum | Sequence[CFDatasetEnum]
+
+
+class IndependentDataset(MetadataMixin):
+    def __init__(self, ds: xr.Dataset, dvars: VariableLike) -> None:
+        if not is_independent(ds):
+            raise ValueError("Dataset must be independent")
+
+        super().__init__()
+        enum, dvars = self._validate_variables(dvars)
+        self.enum: Final = enum
+        self.dvars: Final = dvars
+        self.ds: Final = ds[dvars]
+
+    @staticmethod
+    def _validate_variables(dvars: VariableLike) -> tuple[type[CFDatasetEnum], list[CFDatasetEnum]]:
+        if isinstance(dvars, type):
+            assert issubclass(dvars, CFDatasetEnum)
+            enum = dvars
+            dvars = list(dvars)
+        elif isinstance(dvars, CFDatasetEnum):
+            enum = dvars.__class__
+            dvars = [dvars]
+        else:
+            enum = dvars[0].__class__
+            dvars = list(dvars)
+
+        for dvar in dvars:
+            assert isinstance(dvar, enum)
+        return enum, dvars
+
     @property
-    @abc.abstractmethod
-    def ds(self) -> xr.Dataset:
-        ...
+    def metadata(self) -> DatasetMetadata:
+        return self.enum.metadata
+
+    @classmethod
+    def from_zarr(cls, path: StrPath, dvars: VariableLike) -> IndependentDataset:
+        return cls.from_dependant(xr.open_zarr(path), dvars)
+
+    @classmethod
+    def from_dependant(cls, ds: xr.Dataset, dvars: VariableLike) -> IndependentDataset:
+        return cls(set_independent(ds), dvars)
 
     def to_array(self):
         return self.ds.to_array().transpose(X, Y, ...)
