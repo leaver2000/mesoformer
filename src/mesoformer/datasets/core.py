@@ -46,21 +46,21 @@ class Mesoscale(Data[NDArray[np.float_]]):
         step: int = -25,
         *,
         p0: float = P0,
-        p1=P1,
+        p1:float=P1,
     ) -> ListLike[Number]:
         return [p0, *range(start, stop, step), p1]
 
     @classmethod
     def arange(
         cls,
-        dx: float = 200.0,
-        dy: float | None = None,
         start: int = 1000,
         stop: int = 25 - 1,
         step: int = -25,
+        dx: float = 200.0,
+        dy: float | None = None,
         *,
         p0: float = P0,
-        p1=P1,
+        p1:float=P1,
         rate: float = 1.0,
         pressure: ListLike[Number],
     ) -> Mesoscale:
