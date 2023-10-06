@@ -102,12 +102,11 @@ N = NewType("N", Any)
 P = ParamSpec("P")
 T = TypeVar("T", bound=Any)
 T_co = TypeVar("T_co", bound=Any, covariant=True)
-T_contra = TypeVar("T_contra", bound=Any, contravariant=True)
+T_contra = TypeVar("T_contra", contravariant=True)
 
-# NDArray = Array[..., NumpyT_co]
-EnumT = TypeVar("EnumT", bound="EnumProtocol")
-#
-# Number: TypeAlias = "Union[int, float]"
+
+EnumT = TypeVar("EnumT", bound="EnumType")
+HashKeyT = TypeVar("HashKeyT", bound="HashKeyLike")
 Number: TypeAlias = int | float | np.number[Any]
 Boolean: TypeAlias = bool | np.bool_
 NumberT = TypeVar("NumberT", int, float, np.number[Any])
@@ -143,7 +142,7 @@ class Shaped(Sized, Protocol):
         ...
 
 
-class EnumProtocol(Protocol[T]):
+class EnumType(Protocol[T]):
     value: T
     __iter__: Callable[..., Iterable[Self]]
 
@@ -162,3 +161,21 @@ class EnumProtocol(Protocol[T]):
     @classmethod
     def __call__(cls, value: Any) -> Self:
         ...
+
+
+class Comparable(Protocol[T_contra]):
+    def __ge__(self, __: T_contra) -> bool:
+        ...
+
+    def __gt__(self, __: T_contra) -> bool:
+        ...
+
+    def __le__(self, __: T_contra) -> bool:
+        ...
+
+    def __lt__(self, __: T_contra) -> bool:
+        ...
+
+
+class HashKeyLike(Comparable[T_contra], Hashable, Protocol[T_contra]):
+    ...

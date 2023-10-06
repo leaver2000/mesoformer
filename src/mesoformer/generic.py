@@ -10,7 +10,7 @@ import threading
 import numpy as np
 from torch.utils.data import IterableDataset
 
-from .typing import (  # T,; P,
+from .typing import (
     Any,
     ArrayLike,
     Concatenate,
@@ -19,6 +19,7 @@ from .typing import (  # T,; P,
     Final,
     Generic,
     Hashable,
+    HashKeyT,
     Iterable,
     Iterator,
     Mapping,
@@ -37,6 +38,38 @@ from .utils import indent_kv, squish_map
 K = TypeVar("K", bound=Hashable)
 S = TypeVar("S")
 P = ParamSpec("P")
+
+
+class HashKey(Hashable, Generic[HashKeyT]):
+    __slots__ = ("data",)
+
+    def __init__(self, data: HashKeyT) -> None:
+        super().__init__()
+        self.data = data
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}[{self.data!r}]"
+
+    def __str__(self) -> str:
+        return str(self.data)
+
+    def __hash__(self) -> int:
+        return hash(self.data)
+
+    def __eq__(self, x: HashKeyT) -> bool:
+        return self.data == x
+
+    def __lt__(self, x: HashKeyT) -> bool:
+        return self.data < x
+
+    def __le__(self, x: HashKeyT) -> bool:
+        return self.data <= x
+
+    def __gt__(self, x: HashKeyT) -> bool:
+        return self.data > x
+
+    def __ge__(self, x: HashKeyT) -> bool:
+        return self.data >= x
 
 
 # =====================================================================================================================
@@ -65,6 +98,9 @@ class EnumMetaBase(enum.EnumMeta):
     def difference(cls, other: Iterable[Any]) -> set[Self]:
         return cls.set_.difference(other)
 
+    def intersection(cls, other: Iterable[Any]) -> set[Self]:
+        return cls.set_.intersection(other)
+
 
 class StrEnum(str, enum.Enum):
     def __str__(self) -> str:
@@ -79,8 +115,6 @@ class StrEnum(str, enum.Enum):
 
 
 # =====================================================================================================================
-
-
 class Data(Generic[T], abc.ABC):
     @property
     @abc.abstractmethod

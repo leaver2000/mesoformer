@@ -32,6 +32,7 @@ __all__ = [
 
 import abc
 import dataclasses
+import enum
 import textwrap
 import types
 from typing import Hashable
@@ -41,10 +42,126 @@ import pyproj
 
 from ..config import get_dataset
 from ..generic import Data, EnumMetaBase, StrEnum
-from ..typing import Any, Iterable, Self, TypeAlias, Literal
+from ..typing import Any, DictStrAny, Iterable, Literal, Self, TypeAlias
 from ..utils import nested_proxy
 
 
+# =====================================================================================================================
+#  Coordinate and dimension conventions
+# =====================================================================================================================
+class Convention(str):
+    __slots__ = ("axis", "standard_names")
+    axis: tuple[str, ...]
+    standard_names: tuple[str, ...]
+
+    def __new__(
+        cls,
+        name: DictStrAny | Convention | str | Hashable,
+        *,
+        axis: tuple[Convention, ...] | None = None,
+        standard_names: tuple[str, ...] | None = None,
+        units: str | None = None,
+    ) -> Convention:
+        if isinstance(name, dict):
+            standard_names = name.get("standard_name", [name["name"]])
+            axis = name.get("axis", [name["name"]])
+            name = name["name"]
+        assert isinstance(name, str)
+        obj = super().__new__(cls, name)
+        obj.axis = tuple(sorted(set(axis or [obj])))
+        obj.standard_names = tuple(sorted(set(standard_names or [name])))
+        return obj
+
+
+class ConventionEnum(Convention, enum.Enum, metaclass=EnumMetaBase):
+    def __repr__(self):
+        return str(self.value)
+
+    def __str__(self):
+        return str(self.value)
+
+    @classmethod
+    def _missing_(cls, name: str):
+        for member in cls:
+            if member.casefold() == name.casefold():
+                return member
+            if name in member.standard_names:
+                return member
+
+
+class Dimensions(ConventionEnum):
+    T = {
+        "name": "T",
+        "standard_name": ["time"],
+    }
+    """
+    Variables representing time must always explicitly include the units attribute; there is no default
+    value. The units attribute takes a string value formatted as per the recommendations in the
+    [UDUNITS] package. The following excerpt from the UDUNITS documentation explains the time unit
+    encoding by example:
+    """
+    Z = {
+        "name": "Z",
+        "standard_name": ["level", "height", "altitude"],
+    }
+    Y = {
+        "name": "Y",
+        "standard_name": ["latitude", "grid_latitude"],
+    }
+    X = {
+        "name": "X",
+        "standard_name": ["longitude", "grid_longitude"],
+    }
+
+
+LiteralOrder: TypeAlias = tuple[
+    Literal[Dimensions.T],
+    Literal[Dimensions.Z],
+    Literal[Dimensions.Y],
+    Literal[Dimensions.X],
+]
+DIMENSIONS = T, Z, Y, X = (
+    Dimensions.T,
+    Dimensions.Z,
+    Dimensions.Y,
+    Dimensions.X,
+)
+
+
+class Coordinates(ConventionEnum):
+    time = {
+        "name": "time",
+        "axis": (T,),
+        "standard_name": ["time"],
+    }
+    vertical = {
+        "name": "vertical",
+        "axis": (Z,),
+        "standard_name": ["level", "height", "altitude"],
+    }
+    latitude = {
+        "name": "latitude",
+        "axis": (Y, X),
+        "standard_name": ["latitude", "grid_latitude"],
+    }
+    longitude = {
+        "name": "longitude",
+        "axis": (Y, X),
+        "standard_name": ["longitude", "grid_longitude"],
+    }
+
+
+COORDINATES = TIME, LVL, LAT, LON = (
+    Coordinates.time,
+    Coordinates.vertical,
+    Coordinates.latitude,
+    Coordinates.longitude,
+)
+
+
+# =====================================================================================================================
+#  - Dataset metadata
+# =====================================================================================================================
 @dataclasses.dataclass(frozen=True, repr=False)
 class DatasetMetadata(Data[Any]):
     title: str
@@ -90,43 +207,11 @@ class DatasetMetadata(Data[Any]):
         return pd.DataFrame(list(self.variables.values()))[columns]
 
 
-class OrderedDims(StrEnum, metaclass=EnumMetaBase):
-    TIME = "t"
-    LEVEL = "z"
-    LATITUDE = "y"
-    LONGITUDE = "x"
-
-    @classmethod
-    @property
-    def order(cls) -> LiteralOrder:
-        return ORDERED_DIMS
-
-
-LiteralOrder: TypeAlias = tuple[
-    Literal[OrderedDims.TIME],
-    Literal[OrderedDims.LEVEL],
-    Literal[OrderedDims.LATITUDE],
-    Literal[OrderedDims.LONGITUDE],
-]
-ORDERED_DIMS = T, Z, Y, X = (
-    OrderedDims.TIME,
-    OrderedDims.LEVEL,
-    OrderedDims.LATITUDE,
-    OrderedDims.LONGITUDE,
-)
-
-
 class MetadataMixin(Data[Any], abc.ABC):
     @property
     @abc.abstractmethod
     def metadata(self) -> DatasetMetadata:
         ...
-
-    __ordered_dims = OrderedDims
-
-    @property
-    def dims(self) -> type[OrderedDims]:
-        return self.__ordered_dims
 
     @property
     def md(cls) -> DatasetMetadata:
