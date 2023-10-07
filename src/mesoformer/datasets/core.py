@@ -1,14 +1,33 @@
 from __future__ import annotations
 
-import abc
 
 import numpy as np
 import pandas as pd
 import xarray as xr
 from xarray.core.coordinates import DatasetCoordinates
+import pyresample.geometry
+
+from .metadata import MetadataMixin, CFDatasetEnum, DatasetMetadata
+
+from typing import Final
 
 from ..generic import Data
-from ..typing import Hashable, Iterable, ListLike, NDArray, Number
+from ..typing import (
+    Hashable,
+    Iterable,
+    ListLike,
+    NDArray,
+    Number,
+    StrPath,
+    Sequence,
+    Array,
+    N,
+    Literal,
+    Mapping,
+    N,
+    N2,
+    N4,
+)
 from ..utils import log_scale, sort_unique
 from .metadata import (
     COORDINATES,
@@ -28,10 +47,15 @@ from .metadata import (
 P0 = 1013.25  # - mbar
 P1 = 25.0  # - mbar
 ERA5_GRID_RESOLUTION = 30.0  # km / px
-RATE = ERA5_GRID_RESOLUTION / 2
+# RATE = ERA5_GRID_RESOLUTION / 2
 URMA_GRID_RESOLUTION = 2.5  # km / px
 MESOSCALE_BETA = 200.0  # km
 DEFAULT_PRESSURE: ListLike[Number] = [925.0, 850.0, 700.0, 500.0, 300.0]
+
+DERIVED_SFC_COORDINATE = {LVL: (LVL.axis, [P0])}
+
+Unit = Literal["km", "m"]
+_units: Mapping[Unit, float] = {"km": 1.0, "m": 1000.0}
 
 
 class Mesoscale(Data[NDArray[np.float_]]):
@@ -45,7 +69,7 @@ class Mesoscale(Data[NDArray[np.float_]]):
         troposphere: ListLike[Number] | None = None,
     ) -> None:
         super().__init__()
-        self._tropo = tropo = self._sort_unique_descending(troposphere if troposphere is not None else self._arange())
+        tropo = self._sort_unique_descending(troposphere if troposphere is not None else self._arange())
         self._hpa = hpa = self._sort_unique_descending(pressure)
         if not all(np.isin(hpa, tropo)):
             raise ValueError(f"pressure {hpa} must be a subset of troposphere {tropo}")
@@ -104,48 +128,64 @@ class Mesoscale(Data[NDArray[np.float_]]):
     def data(self) -> Iterable[tuple[str, NDArray[np.float_]]]:
         yield from (("scale", self.scale), ("hpa", self.hpa), ("dx", self.dx), ("dy", self.dy))
 
+    def __array__(self) -> Array[[N, N2], np.float_]:
+        return self.to_numpy()
+
     def to_pandas(self) -> pd.DataFrame:
         return pd.DataFrame(self.to_dict()).set_index("hpa").sort_index()
 
+    def to_numpy(self, *, units: Unit = "km") -> Array[[N, N2], np.float_]:
+        return np.c_[self.dx, self.dy] * _units[units]
+
+    def to_area_extents(self, *, units: Unit = "km") -> Array[[N, N4], np.float_]:
+        xy = self.to_numpy(units=units)
+        return np.c_[-xy, xy]
+
 
 # =====================================================================================================================
-def check_independent_dims(dims: Iterable[Hashable]) -> bool:
-    return tuple(dims) == DIMENSIONS
+def is_dimension_independent(dims: Iterable[Hashable]) -> bool:
+    return all(isinstance(dim, Dimensions) for dim in dims) and tuple(dims) == DIMENSIONS
 
 
-def check_independent_coords(coords: DatasetCoordinates) -> bool:
-    return set(coords) == set(COORDINATES) and all(coords[x].dims == (Y, X) for x in (LON, LAT))
+def is_coordinate_independent(coords: DatasetCoordinates) -> bool:
+    return (
+        all(isinstance(coord, Coordinates) for coord in coords)
+        and set(coords) == set(COORDINATES)
+        and all(coords[x].dims == (Y, X) for x in (LON, LAT))
+    )
 
 
 def is_independent(ds: xr.Dataset) -> bool:
-    return check_independent_dims(ds.dims) and check_independent_coords(ds.coords)
+    return is_dimension_independent(ds.dims) and is_coordinate_independent(ds.coords)
 
 
-def set_independent(ds: xr.Dataset) -> xr.Dataset:
+def make_independent(ds: xr.Dataset) -> xr.Dataset:
     """insures a dependant dataset is in the correct format."""
     if is_independent(ds):
         return ds
 
-    # - move any coordinates that may be assigned as variables to coordinates
-    ds = ds.set_coords(Coordinates.intersection(ds.variables))
-
-    # - rename the dims and variables
     ds = ds.rename_dims(Dimensions.map(ds.dims))
     ds = ds.rename_vars(Coordinates.map(ds.coords))
 
-    # - Move any coordinates that may be assigned as variables to coordinates
-    lon, lat = (ds[coord].compute() for coord in (LON, LAT))
-    ds[LON] = lon
-    ds[LAT] = lat
+    ds = ds.set_coords(iter(Coordinates.intersection(ds.variables)))
 
+    ds = ds.rename_vars(Coordinates.map(ds.coords))
+    # ds = ds.rename_vars(Coordinates.map(ds.coords))
+    ds[LON], ds[LAT] = (ds[coord].compute() for coord in (LON, LAT))
+    from typing import Any
+
+    missing: set[Any]
     # - dimension assignment
     if missing := Dimensions.difference(ds.dims):
         for dim in missing:
             ds = ds.expand_dims(dim, axis=[DIMENSIONS.index(dim)])
 
     # - coordinate assignment
-    if missing := Coordinates.difference(ds.coords):
-        ds = ds.assign_coords({coord: (coord.axis, ["derived"]) for coord in missing})
+    # x = Coordinates.intersection(ds.coords)
+
+    if m := Coordinates.difference(ds.coords):
+        assert m == {LVL}
+        ds = ds.assign_coords(DERIVED_SFC_COORDINATE)
 
     if ds[LAT].dims == (Y,) and ds[LON].dims == (X,):
         # 5.2. Two-Dimensional Latitude, Longitude, Coordinate
@@ -164,14 +204,10 @@ def set_independent(ds: xr.Dataset) -> xr.Dataset:
     return ds
 
 
-from ..typing import StrPath, Sequence
-from .metadata import MetadataMixin, CFDatasetEnum, DatasetMetadata
-from typing import Final
-
 VariableLike = type[CFDatasetEnum] | CFDatasetEnum | Sequence[CFDatasetEnum]
 
 
-class IndependentDataset(MetadataMixin):
+class IndependentDataset:
     def __init__(self, ds: xr.Dataset, dvars: VariableLike) -> None:
         if not is_independent(ds):
             raise ValueError("Dataset must be independent")
@@ -179,7 +215,7 @@ class IndependentDataset(MetadataMixin):
         super().__init__()
         enum, dvars = self._validate_variables(dvars)
         self.enum: Final = enum
-        self.dvars: Final = dvars
+        self._dvars: Final = dvars
         self.ds: Final = ds[dvars]
 
     @staticmethod
@@ -187,7 +223,7 @@ class IndependentDataset(MetadataMixin):
         if isinstance(dvars, type):
             assert issubclass(dvars, CFDatasetEnum)
             enum = dvars
-            dvars = list(dvars)
+            dvars = list(dvars)  # type: ignore
         elif isinstance(dvars, CFDatasetEnum):
             enum = dvars.__class__
             dvars = [dvars]
@@ -197,7 +233,15 @@ class IndependentDataset(MetadataMixin):
 
         for dvar in dvars:
             assert isinstance(dvar, enum)
-        return enum, dvars
+        return enum, dvars  # type: ignore
+
+    @property
+    def names(self):
+        return self.enum.names
+
+    @property
+    def dvars(self):
+        return self._dvars
 
     @property
     def metadata(self) -> DatasetMetadata:
@@ -209,7 +253,7 @@ class IndependentDataset(MetadataMixin):
 
     @classmethod
     def from_dependant(cls, ds: xr.Dataset, dvars: VariableLike) -> IndependentDataset:
-        return cls(set_independent(ds), dvars)
+        return cls(make_independent(ds), dvars)
 
     def to_array(self):
         return self.ds.to_array().transpose(X, Y, ...)
@@ -253,3 +297,15 @@ class IndependentDataset(MetadataMixin):
 
     def _repr_html_(self) -> str:
         return self.ds._repr_html_()
+
+    def get_area_definition(self) -> pyresample.geometry.AreaDefinition:
+        crs = self.metadata.crs
+        area_def = pyresample.geometry.AreaDefinition(
+            "area_def",
+            "area_def",
+            "area_def",
+            projection=crs,
+            width=self.x.size,
+            height=self.y.size,
+        )
+        return area_def

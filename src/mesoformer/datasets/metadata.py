@@ -35,14 +35,15 @@ import dataclasses
 import enum
 import textwrap
 import types
-from typing import Hashable
+
+from typing import Iterable, Literal, TypeAlias, TypeVar, Mapping, Sequence, Any, Hashable
 
 import pandas as pd
 import pyproj
 
 from ..config import get_dataset
 from ..generic import Data, EnumMetaBase, StrEnum
-from ..typing import Any, DictStrAny, Iterable, Literal, Self, TypeAlias
+from ..typing import DictStrAny, Self
 from ..utils import nested_proxy
 
 
@@ -73,7 +74,18 @@ class Convention(str):
         return obj
 
 
-class ConventionEnum(Convention, enum.Enum, metaclass=EnumMetaBase):
+class ConventionMeta(EnumMetaBase["ConventionEnum"]):
+    standard_names: str
+
+    @property
+    def names(cls):
+        names = [member.name for member in cls]
+        return pd.DataFrame(
+            [list({member.name, str(member.value)}.union(member.standard_names)) for member in cls], index=names
+        ).stack()
+
+
+class ConventionEnum(Convention, enum.Enum, metaclass=ConventionMeta):  # type: ignore
     def __repr__(self):
         return str(self.value)
 
@@ -81,7 +93,7 @@ class ConventionEnum(Convention, enum.Enum, metaclass=EnumMetaBase):
         return str(self.value)
 
     @classmethod
-    def _missing_(cls, name: str):
+    def _missing_(cls, name: Any):
         for member in cls:
             if member.casefold() == name.casefold():
                 return member
@@ -162,124 +174,20 @@ COORDINATES = TIME, LVL, LAT, LON = (
 # =====================================================================================================================
 #  - Dataset metadata
 # =====================================================================================================================
-@dataclasses.dataclass(frozen=True, repr=False)
-class DatasetMetadata(Data[Any]):
-    title: str
-    institution: str
-    source: str
-    history: str
-    comment: str
-    coordinates: list[dict[str, Any]]
-    variables: types.MappingProxyType[str, types.MappingProxyType[str, Any]]
-    crs: pyproj.CRS
-
-    @classmethod
-    def from_title(cls, title: str) -> DatasetMetadata:
-        md = get_dataset(title)
-        crs = pyproj.CRS.from_cf(md.pop("crs"))
-        variables = nested_proxy({dvar["standard_name"]: dvar for dvar in md.pop("variables")})
-
-        return cls(**md, variables=variables, crs=crs)
-
-    @property
-    def data(self) -> Iterable[tuple[str, Any]]:
-        yield from [
-            ("title", self.title),
-            ("institution", self.institution),
-            ("source", self.source),
-            ("history", self.history),
-            ("comment", self.comment),
-            ("coordinates", self.coordinates),
-            ("crs", "\n" + textwrap.indent(repr(self.crs), "  ").strip()),
-        ]
-
-    def to_dataframe(self) -> pd.DataFrame:
-        columns = [
-            "short_name",
-            "standard_name",
-            "long_name",
-            "coordinates",
-            "type_of_level",
-            "levels",
-            "description",
-            "units",
-        ]
-        return pd.DataFrame(list(self.variables.values()))[columns]
 
 
-class MetadataMixin(Data[Any], abc.ABC):
+_T = TypeVar("_T")
+SeriesOrType: TypeAlias = "pd.Series[_T] | _T"  # type: ignore
+
+
+class MetaVarMixin(Data[Any], abc.ABC):
     @property
     @abc.abstractmethod
-    def metadata(self) -> DatasetMetadata:
+    def dvars(self) -> Mapping[str, Any]:
         ...
 
     @property
-    def md(cls) -> DatasetMetadata:
-        return cls.metadata
-
-    @property
-    def crs(cls) -> pyproj.CRS:
-        return cls.metadata.crs
-
-    @property
-    def data(self):
-        return self.metadata.data
-
-    def get_coords(self) -> list[Hashable]:
-        return [coord["standard_name"] for coord in self.metadata.coordinates]
-
-
-class CFDatasetEnumMeta(MetadataMixin, EnumMetaBase):
-    """
-    A metaclass for creating Enum classes that have associated metadata.
-
-    Attributes:
-        _metadata_: An instance of DatasetMetadata that contains metadata for the Enum class.
-    """
-
-    _metadata_: DatasetMetadata
-
-    def __new__(cls, name: str, bases: tuple[Any, ...], kwargs, title: str | None = None) -> Self:
-        obj = super().__new__(cls, name, bases, kwargs)
-        if title is not None:
-            obj._metadata_ = DatasetMetadata.from_title(title)
-
-        return obj
-
-    @property
-    def metadata(cls) -> DatasetMetadata:
-        """
-        Returns the metadata associated with the Enum class.
-
-        Returns:
-            An instance of DatasetMetadata that contains metadata for the Enum class.
-        """
-        return cls._metadata_
-
-    def to_dataframe(cls) -> pd.DataFrame:
-        """
-        Returns a pandas DataFrame containing the metadata for the Enum class.
-
-        Returns:
-            A pandas DataFrame containing the metadata for the Enum class.
-        """
-        df = cls.md.to_dataframe()
-        df.index = pd.Index(df["standard_name"].map(lambda x: cls(x).name).rename("member_name"))
-
-        return df
-
-
-class CFDatasetEnum(StrEnum, metaclass=CFDatasetEnumMeta):
-    @property
-    def dvars(self) -> types.MappingProxyType[str, Any]:
-        return self._metadata_.variables[self]
-
-    @property
-    def crs(self) -> pyproj.CRS:
-        return self._metadata_.crs
-
-    @property
-    def short_name(self) -> str:
+    def short_name(self) -> SeriesOrType[str]:
         return self.dvars["short_name"]
 
     @property
@@ -305,6 +213,123 @@ class CFDatasetEnum(StrEnum, metaclass=CFDatasetEnumMeta):
     @property
     def description(self) -> str:
         return self.dvars["description"]
+
+    @property
+    def coords(self) -> list[str]:
+        return self.dvars["coordinates"]
+
+
+@dataclasses.dataclass(frozen=True, repr=False)
+class DatasetMetadata(MetaVarMixin):
+    title: str
+    institution: str
+    source: str
+    history: str
+    comment: str
+    coordinates: list[dict[str, Any]]
+    variables: types.MappingProxyType[str, types.MappingProxyType[str, Any]]
+    crs: pyproj.CRS
+
+    def __post_init__(self):
+        object.__setattr__(self, "_dataframe", pd.DataFrame(list(self.variables.values())))
+
+    @classmethod
+    def from_title(cls, title: str) -> DatasetMetadata:
+        md = get_dataset(title)
+        crs = pyproj.CRS.from_cf(md.pop("crs"))
+        variables = nested_proxy({dvar["standard_name"]: dvar for dvar in md.pop("variables")})
+        return cls(**md, variables=variables, crs=crs)
+
+    @property
+    def metadata(self) -> DatasetMetadata:
+        return self
+
+    @property
+    def dvars(self) -> pd.DataFrame:
+        return self._dataframe  # type: ignore
+
+    def _set_index(self, enum_cls) -> None:
+        self.dvars.index = pd.Index(self.dvars["standard_name"].map(lambda x: enum_cls(x).name).rename("member_name"))
+
+    @property
+    def data(self) -> Iterable[tuple[str, Any]]:
+        yield from [
+            ("title", self.title),
+            ("institution", self.institution),
+            ("source", self.source),
+            ("history", self.history),
+            ("comment", self.comment),
+            ("coordinates", self.coordinates),
+            ("crs", "\n" + textwrap.indent(repr(self.crs), "  ").strip()),
+        ]
+
+    def to_dataframe(self) -> pd.DataFrame:
+        return self.dvars.copy()
+
+
+class MetadataMixin(MetaVarMixin, abc.ABC):
+    @property
+    @abc.abstractmethod
+    def metadata(self) -> DatasetMetadata:
+        ...
+
+    @property
+    def md(cls) -> DatasetMetadata:
+        return cls.metadata
+
+    @property
+    def crs(cls) -> pyproj.CRS:
+        return cls.md.crs
+
+    @property
+    def data(self):
+        return self.md.data
+
+    def get_coords(self) -> list[Hashable]:
+        return [coord["standard_name"] for coord in self.md.coordinates]
+
+
+class CFDatasetEnumMeta(MetadataMixin, EnumMetaBase[StrEnum]):
+    """
+    A metaclass for creating Enum classes that have associated metadata.
+
+    Attributes:
+        _metadata_: An instance of DatasetMetadata that contains metadata for the Enum class.
+    """
+
+    _metadata_: DatasetMetadata
+
+    def __new__(cls, name: str, bases: tuple[Any, ...], kwargs, title: str | None = None) -> Self:  # pyright: ignore
+        obj = super().__new__(cls, name, bases, kwargs)
+        if title is not None:
+            obj._metadata_ = md = DatasetMetadata.from_title(title)
+            md._set_index(obj)
+
+        return obj
+
+    @property
+    def metadata(cls) -> DatasetMetadata:
+        """
+        Returns the metadata associated with the Enum class.
+
+        Returns:
+            An instance of DatasetMetadata that contains metadata for the Enum class.
+        """
+        return cls._metadata_
+
+    @property
+    def dvars(cls) -> pd.DataFrame:
+        return cls.metadata.dvars
+
+    @property
+    def names(self) -> pd.Series[str]:
+        return self.dvars[["long_name", "short_name", "standard_name"]].stack()  # type: ignore
+
+
+class CFDatasetEnum(StrEnum, metaclass=CFDatasetEnumMeta):
+    @property
+    def dvars(self) -> types.MappingProxyType[str, Any]:
+        return self._metadata_.variables[self]  # type: ignore
 
 
 # =====================================================================================================================
@@ -408,3 +433,15 @@ URMA_VARS = (
     URMAEnum.VIS,
     URMAEnum.OROG,
 )
+
+
+_ENUM_REGISTRY: Sequence[type[CFDatasetEnum]] = (ERA5Enum, URMAEnum)
+
+
+def register_enum(enum_cls: type[CFDatasetEnum]) -> None:
+    global _ENUM_REGISTRY
+    _ENUM_REGISTRY = tuple(_ENUM_REGISTRY) + (enum_cls,)
+
+
+def find_enums(vrbs: str | list[str]) -> list[CFDatasetEnum]:
+    return [member for enum_ in _ENUM_REGISTRY for member in enum_.intersection(vrbs)]  # type: ignore

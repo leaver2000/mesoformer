@@ -261,21 +261,6 @@ def nested_proxy(data: Mapping[str, Any]) -> types.MappingProxyType[str, Any]:
 # =====================================================================================================================
 # - iterable utils
 # =====================================================================================================================
-def better_iter(x: _T1 | Iterable[_T1]) -> Iterator[_T1]:
-    """
-
-    >>> list(better_iter((1,2,3,4)))
-    [1, 2, 3, 4]
-    >>> list(better_iter('hello'))
-    ['hello']
-    >>> list(better_iter(['hello', 'world']))
-    ['hello', 'world']
-    """
-    if not isinstance(x, Iterable):
-        raise TypeError(f"expected an iterable, but got {type(x)}")
-    return iter([x] if isinstance(x, str) else x)  # type: ignore
-
-
 def find(func: Callable[[_T1], bool], x: Iterable[_T1]) -> _T1:
     try:
         return next(filter(func, x))
@@ -283,14 +268,33 @@ def find(func: Callable[[_T1], bool], x: Iterable[_T1]) -> _T1:
         raise ValueError(f"no element in {x} satisfies {func}") from e
 
 
-def squish_map(func: Callable[[_T1], _T2], __iterable: _T1 | Iterable[_T1], *args: _T1) -> map[_T2]:
+def squish_iter(x: _T1 | Iterable[_T1]) -> Iterator[_T1]:
+    """
+
+    >>> list(squish_iter((1,2,3,4)))
+    [1, 2, 3, 4]
+    >>> list(squish_iter('hello'))
+    ['hello']
+    >>> list(squish_iter(['hello', 'world']))
+    ['hello', 'world']
+    """
+    if not isinstance(x, Iterable):
+        raise TypeError(f"expected an iterable, but got {type(x)}")
+    return iter([x] if isinstance(x, str) else x)  # type: ignore
+
+
+def squish_chain(__iterable: _T1 | Iterable[_T1], /, *args: _T1) -> itertools.chain[_T1]:
+    return itertools.chain(squish_iter(__iterable), iter(args))
+
+
+def squish_map(__func: Callable[[_T1], _T2], __iterable: _T1 | Iterable[_T1], /, *args: _T1) -> map[_T2]:
     """
     >>> assert list(squish_map(lambda x: x, "foo", "bar", "baz")) == ["foo", "bar", "baz"]
     >>> assert list(squish_map(str, range(3), 4, 5)) == ["0", "1", "2", "4", "5"]
     >>> assert list(squish_map("hello {}".format, (x for x in ("foo", "bar")), "spam")) == ["hello foo", "hello bar", "hello spam"]
     """
 
-    return map(func, itertools.chain(better_iter(__iterable), iter(args)))
+    return map(__func, squish_chain(__iterable, *args))
 
 
 # =====================================================================================================================

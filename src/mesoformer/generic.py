@@ -9,17 +9,16 @@ import threading
 
 import numpy as np
 from torch.utils.data import IterableDataset
-
+import pandas as pd
 from .typing import (
     Any,
     ArrayLike,
     Concatenate,
     DictStrAny,
-    EnumT,
+    # EnumT,
     Final,
     Generic,
     Hashable,
-    HashKeyT,
     Iterable,
     Iterator,
     Mapping,
@@ -32,50 +31,96 @@ from .typing import (
     T,
     TypeVar,
     overload,
+    EnumT,
 )
 from .utils import indent_kv, squish_map
+
+from typing import Callable
+
+# _MetaCls: TypeAlias = "EnumMetaBase"
+# MetaT = TypeVar("MetaT", bound=_MetaCls)
+from typing import Union, Any
+from typing import Concatenate
 
 K = TypeVar("K", bound=Hashable)
 S = TypeVar("S")
 P = ParamSpec("P")
 
 
-class HashKey(Hashable, Generic[HashKeyT]):
-    __slots__ = ("data",)
+# class HashKey(Hashable, Generic[HashKeyT]):
+#     __slots__ = ("data",)
 
-    def __init__(self, data: HashKeyT) -> None:
-        super().__init__()
-        self.data = data
+#     def __init__(self, data: HashKeyT) -> None:
+#         super().__init__()
+#         self.data = data
 
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}[{self.data!r}]"
+#     def __repr__(self) -> str:
+#         return f"{self.__class__.__name__}[{self.data!r}]"
 
-    def __str__(self) -> str:
-        return str(self.data)
+#     def __str__(self) -> str:
+#         return str(self.data)
 
-    def __hash__(self) -> int:
-        return hash(self.data)
+#     def __hash__(self) -> int:
+#         return hash(self.data)
 
-    def __eq__(self, x: HashKeyT) -> bool:
-        return self.data == x
+#     def __eq__(self, x: HashKeyT) -> bool:
+#         return self.data == x
 
-    def __lt__(self, x: HashKeyT) -> bool:
-        return self.data < x
+#     def __lt__(self, x: HashKeyT) -> bool:
+#         return self.data < x
 
-    def __le__(self, x: HashKeyT) -> bool:
-        return self.data <= x
+#     def __le__(self, x: HashKeyT) -> bool:
+#         return self.data <= x
 
-    def __gt__(self, x: HashKeyT) -> bool:
-        return self.data > x
+#     def __gt__(self, x: HashKeyT) -> bool:
+#         return self.data > x
 
-    def __ge__(self, x: HashKeyT) -> bool:
-        return self.data >= x
+#     def __ge__(self, x: HashKeyT) -> bool:
+#         return self.data >= x
 
 
 # =====================================================================================================================
+
+
+EnumT_co = TypeVar("EnumT_co", bound=Union["EnumMetaBase", Any])
+
+
+def _mask_map_set(ecls: EnumMetaBase[Any] | Any, x: Iterable[Any], inverse: bool = False) -> Any:
+    mask = ecls.is_in(x)
+    return {ecls[v] for v in mask[~mask if inverse else mask].index}
+
+
+class Mixer(abc.ABC):
+    @classmethod
+    @abc.abstractmethod
+    # @property
+    def get_names(cls) -> pd.Series[str]:
+        raise NotImplementedError
+
+    @classmethod
+    def is_in(cls, x: Iterable[Any]) -> pd.Series[bool]:
+        if isinstance(x, str):
+            x = [x]
+        return cls.get_names().isin(x).groupby(level=0).any()
+
+    @classmethod
+    def difference(cls: type[Self], /, __x: Iterable[Any]) -> set[Self]:
+        return _mask_map_set(cls, __x, inverse=True)
+
+    @classmethod
+    def intersection(cls: type[Self], /, __x: Iterable[Any]) -> set[Self]:
+        return _mask_map_set(cls, __x, inverse=False)
+
+    @classmethod
+    def map(cls: type[Self], dims: Iterable[Any]):
+        return {dim: cls.__call__(dim) for dim in map(str, dims)}
+
+
 class EnumMetaBase(enum.EnumMeta):
-    @overload
-    def __call__(cls: type[EnumT], __item: str) -> EnumT:
+    __iter__: Callable[..., Iterator[Self]]  # type: ignore
+
+    @overload  # type: ignore
+    def __call__(cls: type[EnumT], __item: Any) -> EnumT:
         ...
 
     @overload
@@ -88,18 +133,24 @@ class EnumMetaBase(enum.EnumMeta):
 
         return list(squish_map(super().__call__, __item, *args))
 
-    def map(cls, dims: Iterable[Hashable]) -> Mapping[Hashable, Self]:
-        return {dim: cls(dim) for dim in map(str, dims)}
-
     @property
-    def set_(cls) -> set[Self]:
-        return set(cls)
+    @abc.abstractmethod
+    def names(cls) -> pd.Series[str]:
+        raise NotImplementedError
 
-    def difference(cls, other: Iterable[Any]) -> set[Self]:
-        return cls.set_.difference(other)
+    def is_in(cls, x: Iterable[Any]) -> pd.Series[bool]:
+        if isinstance(x, str):
+            x = [x]
+        return cls.names.isin(x).groupby(level=0).any()
 
-    def intersection(cls, other: Iterable[Any]) -> set[Self]:
-        return cls.set_.intersection(other)
+    def difference(cls: type[EnumT], /, __x: Iterable[Any]) -> set[EnumT]:
+        return _mask_map_set(cls, __x, inverse=True)
+
+    def intersection(cls: type[EnumT], /, __x: Iterable[Any]) -> set[EnumT]:
+        return _mask_map_set(cls, __x, inverse=False)
+
+    def map(cls, dims: Iterable[Any]):
+        return {dim: cls.__call__(dim) for dim in map(str, dims)}
 
 
 class StrEnum(str, enum.Enum):
@@ -111,7 +162,9 @@ class StrEnum(str, enum.Enum):
 
     @classmethod
     def _missing_(cls, key: Any) -> Self:
-        return cls._member_map_[str(key).upper()]  # type: ignore
+        if (x := cls._member_map_.get(str(key).upper(), None)) is not None:
+            return x  # type: ignore
+        raise ValueError(f"{key!r} is not a valid {cls.__name__}.")
 
 
 # =====================================================================================================================

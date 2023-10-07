@@ -13,32 +13,43 @@ __all__ = [
     "cast",
     "Iterator",
     "Final",
-    "TypeAlias",
     "TypedDict",
-    "Self",
-    "TypeVarTuple",
-    "Unpack",
-    "ParamSpec",
     "overload",
     "Annotated",
     "Collection",
     "EllipsisType",
-    "NDArray",
-    "ArrayLike",
     "Concatenate",
     "TypeGuard",
-    "TensorLike",
     "Scalar",
     "Hashable",
     "Literal",
-    "AnyArrayLike",
+    # - 3.10
+    "TypeAlias",
+    "ParamSpec",
+    # - 3.11
+    "Self",
+    "Unpack",
+    "TypeVarTuple",
+    #
     "Array",
+    "NDArray",
+    "AnyArrayLike",
     "ArrayLike",
     "ListLike",
     "Nd",
+    "N",
+    "N1",
+    "N2",
+    "N3",
+    "N4",
+    "Number",
+    "NumberT",
+    "Boolean",
+    "TensorLike",
     "NestedSequence",
     "TensorLike",
     "Sequence",
+    "NewType",
 ]
 import datetime
 import os
@@ -82,6 +93,11 @@ from ._typing import (
     NDArray,
     NestedSequence,
     TensorLike,
+    N,
+    N1,
+    N2,
+    N3,
+    N4,
 )
 
 if sys.version_info <= (3, 9):
@@ -98,7 +114,6 @@ else:
     from typing import ParamSpec, Self, TypeAlias, TypeVarTuple, Unpack
 
 # =====================================================================================================================
-N = NewType("N", Any)
 P = ParamSpec("P")
 T = TypeVar("T", bound=Any)
 T_co = TypeVar("T_co", bound=Any, covariant=True)
@@ -142,7 +157,8 @@ class Shaped(Sized, Protocol):
         ...
 
 
-class EnumType(Protocol[T]):
+class EnumType(Hashable, Protocol[T]):
+    name: str
     value: T
     __iter__: Callable[..., Iterable[Self]]
 
