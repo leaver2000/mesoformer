@@ -1,6 +1,7 @@
 """A mix of Abstract Base Classes and Generic Data Adapters for various data structures."""
 from __future__ import annotations
-from .enum_table import TableEnum, field
+
+from .enum_table import TableEnum, auto_field as field
 
 
 class Table(str, TableEnum):
@@ -158,6 +159,7 @@ URMA_VARS = (
 def main() -> None:
     assert ERA5.Z == "geopotential"
     assert ERA5("z") == "geopotential"
+
     assert ERA5(["z"]) == ["geopotential"]
     assert ERA5(["z", "q"]) == ["geopotential", "specific_humidity"]
     assert ERA5.to_list() == [
