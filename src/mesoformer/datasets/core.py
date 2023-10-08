@@ -7,7 +7,7 @@ import xarray as xr
 from xarray.core.coordinates import DatasetCoordinates
 import pyresample.geometry
 
-from .metadata import MetadataMixin, CFDatasetEnum, DatasetMetadata
+from .metadata import CFDatasetEnum, DatasetMetadata
 
 from typing import Final
 
@@ -167,7 +167,7 @@ def make_independent(ds: xr.Dataset) -> xr.Dataset:
     ds = ds.rename_dims(Dimensions.map(ds.dims))
     ds = ds.rename_vars(Coordinates.map(ds.coords))
 
-    ds = ds.set_coords(iter(Coordinates.intersection(ds.variables)))
+    ds = ds.set_coords(Coordinates.intersection(ds.variables))
 
     ds = ds.rename_vars(Coordinates.map(ds.coords))
     # ds = ds.rename_vars(Coordinates.map(ds.coords))
@@ -175,6 +175,7 @@ def make_independent(ds: xr.Dataset) -> xr.Dataset:
     from typing import Any
 
     missing: set[Any]
+
     # - dimension assignment
     if missing := Dimensions.difference(ds.dims):
         for dim in missing:

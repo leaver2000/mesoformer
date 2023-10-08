@@ -30,8 +30,9 @@ from .typing import (
     Sequence,
     T,
     TypeVar,
+    TypeAlias,
     overload,
-    EnumT,
+    # EnumT,
 )
 from .utils import indent_kv, squish_map
 
@@ -39,84 +40,185 @@ from typing import Callable
 
 # _MetaCls: TypeAlias = "EnumMetaBase"
 # MetaT = TypeVar("MetaT", bound=_MetaCls)
-from typing import Union, Any
+from typing import Any
 from typing import Concatenate
 
 K = TypeVar("K", bound=Hashable)
 S = TypeVar("S")
 P = ParamSpec("P")
 
+import enum
+import pandas as pd
+import abc
 
-# class HashKey(Hashable, Generic[HashKeyT]):
-#     __slots__ = ("data",)
+# from typing import Generic, TypeVar, Any, Callable, Iterable, Iterator, Hashable, Union, overload, TypeAlias, Mapping
 
-#     def __init__(self, data: HashKeyT) -> None:
-#         super().__init__()
-#         self.data = data
 
-#     def __repr__(self) -> str:
-#         return f"{self.__class__.__name__}[{self.data!r}]"
+Aliases = Mapping[str, list[str]]
+_EnumNames: TypeAlias = str | Iterable[str] | Iterable[Iterable[str | Any]] | Mapping[str, Any]
 
-#     def __str__(self) -> str:
-#         return str(self.data)
+EnumT = TypeVar("EnumT", bound=enum.Enum)
 
-#     def __hash__(self) -> int:
-#         return hash(self.data)
+from typing import Protocol, TypeVar, ClassVar
 
-#     def __eq__(self, x: HashKeyT) -> bool:
-#         return self.data == x
+_T = TypeVar("_T", bound=Hashable, covariant=True)
 
-#     def __lt__(self, x: HashKeyT) -> bool:
-#         return self.data < x
+EnumMember = TypeVar("EnumMember", bound="_EnumSelf")
 
-#     def __le__(self, x: HashKeyT) -> bool:
-#         return self.data <= x
 
-#     def __gt__(self, x: HashKeyT) -> bool:
-#         return self.data > x
+class _EnumSelf(Hashable, Protocol[_T]):  # type: ignore
+    _names: ClassVar[pd.Index[str]]
+    _values: ClassVar[pd.Series[_T]]
+    _member_map_: ClassVar[pd.DataFrame]
 
-#     def __ge__(self, x: HashKeyT) -> bool:
-#         return self.data >= x
+    @classmethod
+    def __getitem__(cls, __names: ListLike[bool] | ListLike[Hashable] | bool | Hashable) -> Self | list[Self]:
+        ...
+
+    @classmethod
+    def is_in(cls, x: Hashable | Iterable[Hashable]) -> pd.Series[bool]:
+        ...
+
+    @classmethod
+    def intersection(cls, __x: Hashable | Iterable[Hashable]) -> list[Self]:
+        ...
+
+    @classmethod
+    def difference(cls, __x: Hashable | Iterable[Hashable]) -> list[Self]:
+        ...
+
+    # name: str
+    # value: T_contra
+    # __iter__: Callable[..., Iterable[Self]]
+
+    # @classmethod
+    # def __len__(cls) -> int:
+    #     ...
+
+    # @classmethod
+    # def __next__(cls) -> Self:
+    #     ...
+
+    # @classmethod
+    # def __getitem__(cls, name: str) -> Self:
+    #     ...
+    # @property
+    # @classmethod
+    # def _values(cls) -> pd.Series[_T]:
+    #     ...
+
+    # def __call__(cls, value: Any) -> Self:
+    #     ...
+
+
+from .typing import ListLike
+
+Items = ListLike[bool] | ListLike[Hashable] | bool | Hashable
+
+EnumCls = TypeVar("EnumCls", bound=enum.EnumMeta)
+
+
+class GenericEnumMeta(enum.EnumMeta, Generic[EnumT]):
+    def __class_getitem__(cls, __x: Any) -> TypeAlias:
+        return cls
+
+
+class PandasEnumMeta(GenericEnumMeta[EnumT]):
+    __iter__: Callable[..., Iterator[EnumT]]  # type: ignore[assignment]
+    _member_map_: pd.DataFrame
+
+    def __new__(
+        cls,
+        name: str,
+        bases: tuple[Any, ...],
+        cls_dict: enum._EnumDict,
+        aliases: Aliases | None = None,
+    ):
+        obj = super().__new__(cls, name, bases, cls_dict)
+
+        if aliases is None:
+            aliases = obj._get_aliases()
+        obj._member_map_ = df = pd.DataFrame.from_dict(
+            {k: [v, *aliases.get(k, [])] for k, v in obj._member_map_.items()}, orient="index"
+        )
+        df.index.name = cls.__name__
+        if df.duplicated().any():
+            raise ValueError(f"Duplicate values found in {cls.__name__}._member_map_.")
+
+        return obj
+
+    @overload  # type: ignore
+    def __getitem__(cls: type[EnumMember], __names: str) -> EnumMember:
+        ...
+
+    @overload
+    def __getitem__(cls: type[EnumMember], __names: ListLike[bool | Hashable]) -> list[EnumMember]:
+        ...
+
+    def __getitem__(cls: type[EnumMember], __names: str | ListLike[bool | Hashable]) -> EnumMember | list[EnumMember]:
+        x = cls._values[__names]
+        if isinstance(x, pd.Series):
+            return x.to_list()
+        return x
+
+    @overload  # type: ignore
+    def __call__(cls: type[EnumMember], __items: str | Hashable) -> EnumMember:
+        ...
+
+    @overload  # type: ignore
+    def __call__(cls: type[EnumMember], __items: Iterable[Hashable]) -> list[EnumMember]:
+        ...
+
+    def __call__(cls: type[EnumMember], __items: str | Iterable[Hashable] | Hashable) -> EnumMember | list[EnumMember]:
+        if isinstance(__items, str):
+            (name,) = cls._names[(cls._member_map_ == __items).any(axis=1)]
+            return cls._values[name]
+        return cls.intersection(__items)
+
+    def to_frame(cls) -> pd.DataFrame:
+        return cls._member_map_
+
+    def to_series(cls):
+        return cls._values
+
+    @property
+    def _names(cls) -> pd.Index[str]:
+        return cls._member_map_.index
+
+    @property
+    def _values(cls) -> pd.Series[EnumT]:
+        return cls._member_map_.iloc[:, 0]
+
+    def to_list(cls) -> list[EnumT]:
+        return cls._values.to_list()
+
+    def _get_aliases(cls) -> Mapping[str, list[str]]:
+        return {}
+
+    def is_in(cls, __x: Hashable | Iterable[Hashable]) -> pd.Series[bool]:
+        if isinstance(__x, str):
+            __x = [__x]
+        return cls.to_frame().isin(__x).any(axis=1)
+
+    def difference(cls: type[EnumMember], __x: Hashable | Iterable[Hashable]):
+        mask = ~cls.is_in(__x)
+        return cls._values[mask].to_list()
+
+    def intersection(cls: type[EnumMember], __x: Hashable | Iterable[Hashable]) -> list[EnumMember]:
+        mask = cls.is_in(__x)
+        return cls._values[mask].to_list()
+
+    def map(cls, __x: Iterable[Hashable]) -> Mapping[str, EnumT]:
+        return {x: cls.__call__(x) for x in map(str, __x)}
 
 
 # =====================================================================================================================
 
 
-EnumT_co = TypeVar("EnumT_co", bound=Union["EnumMetaBase", Any])
+EnumT_co = TypeVar("EnumT_co", bound=Any, covariant=True)
 
 
-def _mask_map_set(ecls: EnumMetaBase[Any] | Any, x: Iterable[Any], inverse: bool = False) -> Any:
-    mask = ecls.is_in(x)
-    return {ecls[v] for v in mask[~mask if inverse else mask].index}
-
-
-class Mixer(abc.ABC):
-    @classmethod
-    @abc.abstractmethod
-    # @property
-    def get_names(cls) -> pd.Series[str]:
-        raise NotImplementedError
-
-    @classmethod
-    def is_in(cls, x: Iterable[Any]) -> pd.Series[bool]:
-        if isinstance(x, str):
-            x = [x]
-        return cls.get_names().isin(x).groupby(level=0).any()
-
-    @classmethod
-    def difference(cls: type[Self], /, __x: Iterable[Any]) -> set[Self]:
-        return _mask_map_set(cls, __x, inverse=True)
-
-    @classmethod
-    def intersection(cls: type[Self], /, __x: Iterable[Any]) -> set[Self]:
-        return _mask_map_set(cls, __x, inverse=False)
-
-    @classmethod
-    def map(cls: type[Self], dims: Iterable[Any]):
-        return {dim: cls.__call__(dim) for dim in map(str, dims)}
-
-
-class EnumMetaBase(enum.EnumMeta):
+class EnumMetaBase(enum.EnumMeta, Generic[EnumT_co]):
     __iter__: Callable[..., Iterator[Self]]  # type: ignore
 
     @overload  # type: ignore
@@ -143,11 +245,13 @@ class EnumMetaBase(enum.EnumMeta):
             x = [x]
         return cls.names.isin(x).groupby(level=0).any()
 
-    def difference(cls: type[EnumT], /, __x: Iterable[Any]) -> set[EnumT]:
-        return _mask_map_set(cls, __x, inverse=True)
+    def difference(cls, __x: Iterable[Any]) -> set[EnumT_co]:
+        mask = cls.is_in(__x)
+        return {cls[v] for v in mask[~mask].index}
 
-    def intersection(cls: type[EnumT], /, __x: Iterable[Any]) -> set[EnumT]:
-        return _mask_map_set(cls, __x, inverse=False)
+    def intersection(cls, __x: Iterable[Any]) -> set[Hashable]:
+        mask = cls.is_in(__x)
+        return {cls[v] for v in mask[mask].index}
 
     def map(cls, dims: Iterable[Any]):
         return {dim: cls.__call__(dim) for dim in map(str, dims)}

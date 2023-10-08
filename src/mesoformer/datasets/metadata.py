@@ -43,7 +43,7 @@ import pyproj
 
 from ..config import get_dataset
 from ..generic import Data, EnumMetaBase, StrEnum
-from ..typing import DictStrAny, Self
+from ..typing import DictStrAny
 from ..utils import nested_proxy
 
 
@@ -74,7 +74,7 @@ class Convention(str):
         return obj
 
 
-class ConventionMeta(EnumMetaBase["ConventionEnum"]):
+class ConventionMeta(EnumMetaBase):
     standard_names: str
 
     @property
@@ -289,7 +289,10 @@ class MetadataMixin(MetaVarMixin, abc.ABC):
         return [coord["standard_name"] for coord in self.md.coordinates]
 
 
-class CFDatasetEnumMeta(MetadataMixin, EnumMetaBase[StrEnum]):
+from ..generic import PandasEnumMeta
+
+
+class CFDatasetEnumMeta(MetadataMixin, PandasEnumMeta["CFDatasetEnum"]):
     """
     A metaclass for creating Enum classes that have associated metadata.
 
@@ -299,11 +302,20 @@ class CFDatasetEnumMeta(MetadataMixin, EnumMetaBase[StrEnum]):
 
     _metadata_: DatasetMetadata
 
-    def __new__(cls, name: str, bases: tuple[Any, ...], kwargs, title: str | None = None) -> Self:  # pyright: ignore
-        obj = super().__new__(cls, name, bases, kwargs)
+    def __new__(
+        cls, name: str, bases: tuple[Any, ...], cls_dict: enum._EnumDict, title: str | None = None
+    ) -> Any:  # pyright: ignore
         if title is not None:
-            obj._metadata_ = md = DatasetMetadata.from_title(title)
-            md._set_index(obj)
+            md = DatasetMetadata.from_title(title)
+            df = md.dvars[["long_name", "short_name", "standard_name"]]
+            df.index = df.short_name.str.upper()
+            alis = df.T.to_dict("list")
+        else:
+            md = None
+            alis = None
+        obj = super().__new__(cls, name, bases, cls_dict, aliases=alis)
+        if md is not None:
+            obj._metadata_ = md
 
         return obj
 
@@ -324,6 +336,10 @@ class CFDatasetEnumMeta(MetadataMixin, EnumMetaBase[StrEnum]):
     @property
     def names(self) -> pd.Series[str]:
         return self.dvars[["long_name", "short_name", "standard_name"]].stack()  # type: ignore
+
+    @classmethod
+    def _missing_(cls, x):
+        return cls.intersection(x)
 
 
 class CFDatasetEnum(StrEnum, metaclass=CFDatasetEnumMeta):

@@ -8,6 +8,7 @@ __all__ = [
     "TYPE_CHECKING",
     "Any",
     "Callable",
+    "ClassVar",
     "Generic",
     "Mapping",
     "cast",
@@ -78,6 +79,7 @@ from typing import (
     Union,
     cast,
     overload,
+    ClassVar,
 )
 
 import numpy as np
