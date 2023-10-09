@@ -13,6 +13,7 @@ from typing import MutableMapping, NamedTuple, TypeAlias
 
 import pandas as pd
 
+from .generic import DataMapping
 from .typing import (
     TYPE_CHECKING,
     Any,
@@ -51,7 +52,7 @@ _ENUM_DICT_RESERVED_KEYS = (
 MemberMetadata: TypeAlias = MutableMapping[str, Any]
 
 
-_Items: TypeAlias = list[Hashable] | pd.Index | pd.Series | slice | MaskType
+_Items: TypeAlias = list[str] | pd.Index | pd.Series | slice | MaskType
 _T = TypeVar("_T")
 
 
@@ -129,7 +130,7 @@ def _unpack_info(old: enum._EnumDict) -> tuple[enum._EnumDict, dict[str, Any]]:
 
 def _repack_info(
     name: str, member_map: Mapping[str, enum.Enum], metadata: dict[str, dict[str, Any]], class_metadata: dict[str, Any]
-) -> types.MappingProxyType[str, Any]:
+) -> DataMapping[str, Any]:
     data = {k: [v, *set(metadata[k].pop(_ENUM_ALIASES, []))] for k, v in member_map.items()}
     df = pd.DataFrame.from_dict(data, orient="index")
     df.index.name = "name"
@@ -138,7 +139,7 @@ def _repack_info(
         raise ValueError(f"Duplicate values found in {name}._member_map_.")
 
     member_metadata = types.MappingProxyType(collections.defaultdict(dict, metadata))
-    return types.MappingProxyType(
+    return DataMapping(
         {
             "name": name,
             "data": df,
@@ -150,7 +151,7 @@ def _repack_info(
 
 class Descriptor:
     __getitem__: Any
-    _data: collections.defaultdict[int, Mapping]  # [int, types.MappingProxyType[str, Any]]
+    _data: collections.defaultdict[int, Mapping[str, Any]]
 
     def __init__(self) -> None:
         self._data = collections.defaultdict(dict, {})
@@ -240,30 +241,16 @@ class_metadata:
 
     if TYPE_CHECKING:
 
-        @overload  # type: ignore
-        def __getitem__(__cls: type[EnumT], __item: Hashable) -> EnumT:
+        @overload
+        def __getitem__(cls: type[EnumT], __item: str) -> EnumT:
             ...
 
         @overload
-        def __getitem__(__cls: type[EnumT], __item: _Items) -> list[EnumT]:
+        def __getitem__(cls: type[EnumT], __item: _Items) -> list[EnumT]:
             ...
 
-        @overload
-        @classmethod
-        def __getitem__(cls, __item: Hashable) -> Any:
-            ...
-
-        @overload
-        @classmethod
-        def __getitem__(cls, __item: _Items) -> list[Any]:
-            ...
-
-        @overload
-        def __getitem__(cls, __item) -> Any:
-            ...
-
-    def __getitem__(cls, __item: Hashable | _Items) -> Any:
-        x = cls._values[__item]  # type: ignore
+    def __getitem__(cls: type[EnumT], __item: str | _Items) -> Any:
+        x = cls._values[__item]
         if isinstance(x, pd.Series):
             return x.to_list()
         return x

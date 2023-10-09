@@ -27,6 +27,7 @@ import urllib.parse
 from collections.abc import Sequence
 
 import numpy as np
+import pandas as pd
 import toml
 import torch
 from frozenlist import FrozenList
@@ -228,6 +229,9 @@ _array2string = functools.partial(
 def indent_pair(k: str, v: Any, l_pad: int, prefix="  ") -> str:
     if isinstance(v, np.ndarray):
         v = _array2string(v)
+    elif isinstance(v, pd.DataFrame):
+        sep = "\n".ljust(l_pad)
+        v = sep + sep.join(v.to_string().splitlines())
     return textwrap.indent(f"{k.rjust(l_pad)}: {v}", prefix=prefix)
 
 
