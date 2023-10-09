@@ -17,6 +17,7 @@ __all__ = [
     "load_toml",
     "tqdm",
 ]
+import enum
 import functools
 import itertools
 import json
@@ -30,9 +31,6 @@ import toml
 import torch
 from frozenlist import FrozenList
 from scipy.interpolate import RegularGridInterpolator
-import enum
-import numpy as np
-
 
 try:
     get_ipython  # type: ignore
@@ -44,7 +42,6 @@ from .typing import (
     Any,
     Array,
     Callable,
-    TypeGuard,
     Hashable,
     Iterable,
     Iterator,
@@ -69,8 +66,16 @@ T_contra = TypeVar("T_contra", contravariant=True)
 TensorT = TypeVar("TensorT", torch.Tensor, Array[..., Any])
 
 
-def is_hashable(element: Any) -> TypeGuard[Hashable]:
-    return isinstance(element, Hashable)
+def is_function(x: Any) -> TypeGuard[function]:
+    return not isinstance(x, type) and callable(x)
+
+
+def is_exception(x: Any) -> TypeGuard[type[Exception]]:
+    return isinstance(x, type) and issubclass(x, BaseException)
+
+
+def is_hashable(x: Any) -> TypeGuard[Hashable]:
+    return isinstance(x, Hashable)
 
 
 def is_scalar(x: Any) -> TypeGuard[np.generic | bool | int | float | complex | str | bytes | memoryview | enum.Enum]:

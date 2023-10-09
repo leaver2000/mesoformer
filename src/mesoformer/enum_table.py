@@ -72,7 +72,7 @@ if TYPE_CHECKING:
             ...
 
         @classmethod
-        def is_in(cls, x: Hashable | Iterable[Hashable]) -> pd.Series[bool]:
+        def is_in(cls, __x: Hashable | Iterable[Hashable]) -> pd.Series[bool]:
             ...
 
         @classmethod
@@ -84,7 +84,7 @@ if TYPE_CHECKING:
             ...
 
         @classmethod
-        def remap(cls, __x: Hashable | Iterable[Hashable]) -> list[Self]:
+        def remap(cls, __x: Hashable | Iterable[Hashable]) -> Mapping[Hashable, Self]:
             ...
 
     _S1 = TypeVar("_S1", bound=Any)

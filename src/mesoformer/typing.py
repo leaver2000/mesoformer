@@ -125,24 +125,25 @@ T_co = TypeVar("T_co", bound=Any, covariant=True)
 T_contra = TypeVar("T_contra", contravariant=True)
 HashableT = TypeVar("HashableT", bound=Hashable)
 
+# - builtins
+Method = Callable[Concatenate[T, P], T_co]
+ClassMethod = Callable[Concatenate[type[T], P], T_co]
+Pair: TypeAlias = tuple[T, T]
+DictStr: TypeAlias = dict[str, T]
+DictStrAny: TypeAlias = DictStr[Any]
+StrPath: TypeAlias = "str | os.PathLike[str]"
 
-# EnumT = TypeVar("EnumT", bound="EnumType")
-# HashKeyT = TypeVar("HashKeyT", bound="HashKeyLike")
+# - numpy
 Number: TypeAlias = int | float | np.number[Any]
 Boolean: TypeAlias = bool | np.bool_
 NumberT = TypeVar("NumberT", int, float, np.number[Any])
 
-
+# - pandas
 PythonScalar: TypeAlias = Union[str, float, bool]
 DatetimeLikeScalar: TypeAlias = Union["pd.Period", "pd.Timestamp", "pd.Timedelta"]
 PandasScalar: TypeAlias = Union["pd.Period", "pd.Timestamp", "pd.Timedelta", "pd.Interval"]
 Scalar: TypeAlias = Union[PythonScalar, PandasScalar, np.datetime64, np.timedelta64, datetime.date]
 MaskType: TypeAlias = Union["pd.Series[bool]", "NDArray[np.bool_]", list[bool]]
-
-Pair: TypeAlias = tuple[T, T]
-DictStr: TypeAlias = dict[str, T]
-DictStrAny: TypeAlias = DictStr[Any]
-StrPath: TypeAlias = "str | os.PathLike[str]"
 
 
 # =====================================================================================================================
