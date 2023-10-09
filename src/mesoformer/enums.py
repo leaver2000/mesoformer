@@ -1,11 +1,20 @@
 """A mix of Abstract Base Classes and Generic Data Adapters for various data structures."""
 from __future__ import annotations
 
-from .enum_table import TableEnum
-from .enum_table import auto_field as field
+from typing import Any, MutableMapping
+
+import pyproj
+
+from .enum_table import TableEnum, auto_field
 
 
-class Table(str, TableEnum):
+class IndependentVariables(str, TableEnum):
+    metadata: MutableMapping[str, Any]  # type: ignore
+
+    @staticmethod
+    def _generate_next_value_(name: str, *_):
+        return name
+
     def __repr__(self):
         return str(self.value)
 
@@ -13,15 +22,64 @@ class Table(str, TableEnum):
         return str(self.value)
 
 
-class Dimensions(Table):
-    @staticmethod
-    def _generate_next_value_(name: str, *_):
-        return name.upper()
+def get_crs(name: str) -> pyproj.CRS:
+    # TODO: move this to disk
+    if name == ERA5.__name__:
+        cf = {
+            "crs_wkt": 'GEOGCRS["WGS 84",ENSEMBLE["World Geodetic System 1984 ensemble",MEMBER["World Geodetic System 1984 (Transit)"],MEMBER["World Geodetic System 1984 (G730)"],MEMBER["World Geodetic System 1984 (G873)"],MEMBER["World Geodetic System 1984 (G1150)"],MEMBER["World Geodetic System 1984 (G1674)"],MEMBER["World Geodetic System 1984 (G1762)"],MEMBER["World Geodetic System 1984 (G2139)"],ELLIPSOID["WGS 84",6378137,298.257223563,LENGTHUNIT["metre",1]],ENSEMBLEACCURACY[2.0]],PRIMEM["Greenwich",0,ANGLEUNIT["degree",0.0174532925199433]],CS[ellipsoidal,2],AXIS["geodetic latitude (Lat)",north,ORDER[1],ANGLEUNIT["degree",0.0174532925199433]],AXIS["geodetic longitude (Lon)",east,ORDER[2],ANGLEUNIT["degree",0.0174532925199433]],USAGE[SCOPE["Horizontal component of 3D system."],AREA["World."],BBOX[-90,-180,90,180]],ID["EPSG",4326]]',
+            "geographic_crs_name": "WGS 84",
+            "semi_major_axis": 6378137.0,
+            "semi_minor_axis": 6356752.314245179,
+            "inverse_flattening": 298.257223563,
+            "reference_ellipsoid_name": "WGS 84",
+            "longitude_of_prime_meridian": 0.0,
+            "prime_meridian_name": "Greenwich",
+            "horizontal_datum_name": "World Geodetic System 1984 ensemble",
+            "grid_mapping_name": "latitude_longitude",
+        }
+    elif name == URMA.__name__:
+        cf = {
+            "geographic_crs_name": "NDFD CONUS 2.5km Lambert Conformal Conic",
+            "projected_crs_name": "NDFD",
+            "grid_mapping_name": "lambert_conformal_conic",
+            "semi_major_axis": 6378137.0,
+            "semi_minor_axis": 6356752.31424518,
+            "inverse_flattening": 298.25722356301,
+            "reference_ellipsoid_name": "WGS 84",
+            "longitude_of_prime_meridian": 0.0,
+            "prime_meridian_name": "Greenwich",
+            "horizontal_datum_name": "WGS84",
+            "latitude_of_projection_origin": 20.191999,
+            "longitude_of_projection_origin": 238.445999,
+            "standard_parallel": 25,
+            "false_easting": 0.0,
+            "false_northing": 0.0,
+            "units": "m",
+        }
+    else:
+        raise ValueError(f"Unknown CRS {name!r}")
+    return pyproj.CRS.from_cf(cf)
 
-    T = field(aliases=["time"])
-    Z = field(aliases=["level", "height", "altitude"])
-    Y = field(aliases=["latitude", "grid_latitude"])
-    X = field(aliases=["longitude", "grid_longitude"])
+
+class DependentVariables(IndependentVariables):
+    @classmethod  # type:ignore
+    @property
+    def crs(cls) -> pyproj.CRS:
+        md = cls.metadata
+        if "crs" not in md:
+            md["crs"] = get_crs(cls.__name__)
+
+        return md["crs"]
+
+
+# =====================================================================================================================
+
+
+class Dimensions(IndependentVariables):
+    T = auto_field(aliases=["t", "time"])
+    Z = auto_field(aliases=["z", "level", "height", "altitude"])
+    Y = auto_field(aliases=["y", "latitude", "grid_latitude"])
+    X = auto_field(aliases=["x", "longitude", "grid_longitude"])
 
 
 DIMENSIONS = T, Z, Y, X = (
@@ -32,15 +90,11 @@ DIMENSIONS = T, Z, Y, X = (
 )
 
 
-class Coordinates(Table):
-    @staticmethod
-    def _generate_next_value_(name: str, *_):
-        return name.lower()
-
-    TIME = field(aliases=["time"], metadata={"axis": (T,)})
-    VERTICAL = field(aliases=["level", "height", "altitude"], metadata={"axis": (Z,)})
-    LATITUDE = field(aliases=["latitude", "grid_latitude"], metadata={"axis": (Y, X)})
-    LONGITUDE = field(aliases=["longitude", "grid_longitude"], metadata={"axis": (Y, X)})
+class Coordinates(IndependentVariables):
+    time = auto_field(axis=(T,))
+    vertical = auto_field(aliases=["level", "height", "altitude"], axis=(Z,))
+    latitude = auto_field(aliases=["grid_latitude"], axis=(Y, X))
+    longitude = auto_field(aliases=["grid_longitude"], axis=(Y, X))
 
     @property
     def axis(self) -> tuple[Dimensions, ...]:
@@ -48,14 +102,14 @@ class Coordinates(Table):
 
 
 COORDINATES = TIME, LVL, LAT, LON = (
-    Coordinates.TIME,
-    Coordinates.VERTICAL,
-    Coordinates.LATITUDE,
-    Coordinates.LONGITUDE,
+    Coordinates.time,
+    Coordinates.vertical,
+    Coordinates.latitude,
+    Coordinates.longitude,
 )
 
 
-class ERA5(Table):
+class ERA5(DependentVariables):
     r"""
     | member_name   | short_name   | standard_name       | long_name           | type_of_level   | units      |
     |:--------------|:-------------|:--------------------|:--------------------|:----------------|:-----------|
@@ -67,12 +121,12 @@ class ERA5(Table):
     | W             | w            | vertical_velocity   | Vertical velocity   | isobaricInhPa   | Pa s**-1   |
     """
 
-    Z = field("geopotential", aliases=["z"], metadata={"units": "m**2 s**-2"})
-    Q = field("specific_humidity", aliases=["q"], metadata={"units": "kg kg**-1"})
-    T = field("temperature", aliases=["t"], metadata={"units": "K"})
-    U = field("u_component_of_wind", aliases=["u"], metadata={"units": "m s**-1"})
-    V = field("v_component_of_wind", aliases=["v"], metadata={"units": "m s**-1"})
-    W = field("vertical_velocity", aliases=["w"], metadata={"units": "Pa s**-1"})
+    Z = auto_field("geopotential", aliases=["z"], units="m**2 s**-2")
+    Q = auto_field("specific_humidity", aliases=["q"], units="kg kg**-1")
+    T = auto_field("temperature", aliases=["t"], units="K")
+    U = auto_field("u_component_of_wind", aliases=["u"], units="m s**-1")
+    V = auto_field("v_component_of_wind", aliases=["v"], units="m s**-1")
+    W = auto_field("vertical_velocity", aliases=["w"], units="Pa s**-1")
 
 
 ERA5_VARS = (
@@ -92,7 +146,7 @@ ERA5_VARS = (
 )
 
 
-class URMA(Table):
+class URMA(DependentVariables):
     """
     | member_name   | short_name   | standard_name           | long_name                    | type_of_level         | units       |
     |:--------------|:-------------|:------------------------|:-----------------------------|:----------------------|:------------|
@@ -155,31 +209,3 @@ URMA_VARS = (
     URMA.VIS,
     URMA.OROG,
 )
-
-
-def main() -> None:
-    assert ERA5.Z == "geopotential"
-    assert ERA5("z") == "geopotential"
-
-    assert ERA5(["z"]) == ["geopotential"]
-    assert ERA5(["z", "q"]) == ["geopotential", "specific_humidity"]
-    assert ERA5.to_list() == [
-        "geopotential",
-        "specific_humidity",
-        "temperature",
-        "u_component_of_wind",
-        "v_component_of_wind",
-        "vertical_velocity",
-    ]
-    try:
-        ERA5("nope")
-        raise AssertionError
-    except ValueError:
-        pass
-    assert URMA[["TCC"]] == ["total_cloud_cover"]
-    print(Dimensions.to_frame())
-    assert LAT.axis == (Y, X)
-
-
-if __name__ == "__main__":
-    main()

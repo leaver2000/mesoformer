@@ -51,6 +51,8 @@ __all__ = [
     "TensorLike",
     "Sequence",
     "NewType",
+    "MutableMapping",
+    "NamedTuple",
 ]
 import datetime
 import os
@@ -70,6 +72,8 @@ from typing import (
     Iterator,
     Literal,
     Mapping,
+    MutableMapping,
+    NamedTuple,
     NewType,
     Protocol,
     Sequence,
@@ -119,6 +123,7 @@ P = ParamSpec("P")
 T = TypeVar("T", bound=Any)
 T_co = TypeVar("T_co", bound=Any, covariant=True)
 T_contra = TypeVar("T_contra", contravariant=True)
+HashableT = TypeVar("HashableT", bound=Hashable)
 
 
 # EnumT = TypeVar("EnumT", bound="EnumType")
@@ -156,43 +161,3 @@ class Shaped(Sized, Protocol):
     @property
     def shape(self) -> tuple[int, ...]:
         ...
-
-
-# class EnumType(Hashable, Protocol[T]):
-#     name: str
-#     value: T
-#     __iter__: Callable[..., Iterable[Self]]
-
-#     @classmethod
-#     def __len__(cls) -> int:
-#         ...
-
-#     @classmethod
-#     def __next__(cls) -> Self:
-#         ...
-
-#     @classmethod
-#     def __getitem__(cls, name: str) -> Self:
-#         ...
-
-#     @classmethod
-#     def __call__(cls, value: Any) -> Self:
-#         ...
-
-
-# class Comparable(Protocol[T_contra]):
-#     def __ge__(self, __: T_contra) -> bool:
-#         ...
-
-#     def __gt__(self, __: T_contra) -> bool:
-#         ...
-
-#     def __le__(self, __: T_contra) -> bool:
-#         ...
-
-#     def __lt__(self, __: T_contra) -> bool:
-#         ...
-
-
-# class HashKeyLike(Comparable[T_contra], Hashable, Protocol[T_contra]):
-#     ...

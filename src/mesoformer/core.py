@@ -1,7 +1,9 @@
+# mypy: ignore-errors
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pyproj
 import pyresample.geometry
 import xarray as xr
 from xarray.core.coordinates import DatasetCoordinates
@@ -14,9 +16,9 @@ from .enums import (
     LVL,
     TIME,
     Coordinates,
+    DependentVariables,
     Dimensions,
     T,
-    TableEnum,
     X,
     Y,
     Z,
@@ -156,18 +158,19 @@ def is_independent(ds: xr.Dataset) -> bool:
     return is_dimension_independent(ds.dims) and is_coordinate_independent(ds.coords)
 
 
-def make_independent(ds: xr.Dataset) -> xr.Dataset:
+def make_independent(ds: xr.Dataset) -> xr.Dataset:  # type:ignore
     """insures a dependant dataset is in the correct format."""
     if is_independent(ds):
         return ds
 
-    ds = ds.rename_dims(Dimensions.map(ds.dims))
-    ds = ds.rename_vars(Coordinates.map(ds.coords))
+    ds = ds.rename_dims(Dimensions.remap(ds.dims))
+
+    ds = ds.rename_vars(Coordinates.remap(ds.coords))
 
     ds = ds.set_coords(Coordinates.intersection(ds.variables))
+    ds = ds.rename_vars(Coordinates.remap(ds.coords))
 
-    ds = ds.rename_vars(Coordinates.map(ds.coords))
-    # ds = ds.rename_vars(Coordinates.map(ds.coords))
+    ds = ds.rename_vars(Coordinates.remap(ds.coords))
     ds[LON], ds[LAT] = (ds[coord].compute() for coord in (LON, LAT))
 
     # - dimension assignment
@@ -175,11 +178,9 @@ def make_independent(ds: xr.Dataset) -> xr.Dataset:
         for dim in missing:
             ds = ds.expand_dims(dim, axis=[DIMENSIONS.index(dim)])
 
-    # - coordinate assignment
-    # x = Coordinates.intersection(ds.coords)
-
+    # # - coordinate assignment
     if missing := Coordinates.difference(ds.coords):
-        assert missing == {LVL}
+        assert missing == [LVL], missing
         ds = ds.assign_coords(DERIVED_SFC_COORDINATE)
 
     if ds[LAT].dims == (Y,) and ds[LON].dims == (X,):
@@ -190,7 +191,7 @@ def make_independent(ds: xr.Dataset) -> xr.Dataset:
         # coordinate variables. These variables are identified as coordinates by use of the coordinates
         # attribute
         lon, lat = (ds[coord].to_numpy() for coord in (LON, LAT))
-        yy, xx = np.meshgrid(lat, lon, indexing="xy")
+        yy, xx = np.meshgrid(lat, lon, indexing="ij")
 
         ds = ds.assign_coords({LAT: (LAT.axis, yy), LON: (LON.axis, xx)})
 
@@ -199,27 +200,29 @@ def make_independent(ds: xr.Dataset) -> xr.Dataset:
     return ds
 
 
-VariableLike = type[TableEnum] | TableEnum | Sequence[TableEnum]
+Depends = type[DependentVariables] | DependentVariables | Sequence[DependentVariables]
 
 
-class IndependentDataset:
-    def __init__(self, ds: xr.Dataset, dvars: VariableLike) -> None:
+# =====================================================================================================================
+class GriddedDataset(pyresample.geometry.GridDefinition):
+    def __init__(self, ds: xr.Dataset, dvars: Depends) -> None:
         if not is_independent(ds):
             raise ValueError("Dataset must be independent")
-
-        super().__init__()
+        lons, lats = (ds[x].to_numpy() for x in (LON, LAT))
+        lons = (lons + 180.0) % 360 - 180.0
+        super().__init__(lons, lats)
         enum, dvars = self._validate_variables(dvars)
         self.enum: Final = enum
-        self._dvars: Final = dvars
+        self.dvars: Final = dvars
         self.ds: Final = ds[dvars]
 
     @staticmethod
-    def _validate_variables(dvars: VariableLike) -> tuple[type[TableEnum], list[TableEnum]]:
+    def _validate_variables(dvars: Depends) -> tuple[type[DependentVariables], list[DependentVariables]]:
         if isinstance(dvars, type):
-            assert issubclass(dvars, TableEnum)
+            assert issubclass(dvars, DependentVariables)
             enum = dvars
             dvars = list(dvars)  # type: ignore
-        elif isinstance(dvars, TableEnum):
+        elif isinstance(dvars, DependentVariables):
             enum = dvars.__class__
             dvars = [dvars]
         else:
@@ -235,19 +238,19 @@ class IndependentDataset:
         return self.enum._names
 
     @property
-    def dvars(self):
-        return self._dvars
+    def crs(self) -> pyproj.CRS:
+        return self.enum.crs
 
     @property
     def metadata(self) -> Mapping[str, Any]:
-        return self.enum._metadata_
+        return self.enum.metadata
 
     @classmethod
-    def from_zarr(cls, path: StrPath, dvars: VariableLike) -> IndependentDataset:
+    def from_zarr(cls, path: StrPath, dvars: Depends) -> GriddedDataset:
         return cls.from_dependant(xr.open_zarr(path), dvars)
 
     @classmethod
-    def from_dependant(cls, ds: xr.Dataset, dvars: VariableLike) -> IndependentDataset:
+    def from_dependant(cls, ds: xr.Dataset, dvars: Depends) -> GriddedDataset:
         return cls(make_independent(ds), dvars)
 
     def to_array(self):
@@ -279,29 +282,32 @@ class IndependentDataset:
     def level(self) -> xr.DataArray:
         return self.ds[LVL]
 
-    @property
-    def lons(self) -> xr.DataArray:
-        return self.ds[LON]
-
-    @property
-    def lats(self) -> xr.DataArray:
-        return self.ds[LAT]
-
     def __repr__(self) -> str:
         return self.ds.__repr__()
 
     def _repr_html_(self) -> str:
         return self.ds._repr_html_()
 
-    def get_area_definition(self) -> pyresample.geometry.AreaDefinition:
-        raise NotImplementedError()
-        crs = self.metadata.crs
-        area_def = pyresample.geometry.AreaDefinition(
-            "area_def",
-            "area_def",
-            "area_def",
-            projection=crs,
-            width=self.x.size,
-            height=self.y.size,
-        )
-        return area_def
+    # def get_area_definition(self) -> pyresample.geometry.AreaDefinition:
+    #     raise NotImplementedError()
+    #     crs = self.metadata.crs
+    #     area_def = pyresample.geometry.AreaDefinition(
+    #         "area_def",
+    #         "area_def",
+    #         "area_def",
+    #         projection=crs,
+    #         width=self.x.size,
+    #         height=self.y.size,
+    #     )
+    #     return area_def
+
+    # def get_coordinates(self: IndependentDataset) -> tuple[Array[[N, N], np.float_], Array[[N, N], np.float_]]:
+    #     lons = self.lons.to_numpy()
+    #     lats = self.lats.to_numpy()
+    #     lons = (lons + 180.0) % 360 - 180.0
+    #     return lons, lats
+
+    # def get_grid_definition(self: IndependentDataset) -> pyresample.geometry.GridDefinition:
+    #     lons, lats = self.get_coordinates()
+
+    #     return pyresample.geometry.GridDefinition(lons, lats)

@@ -11,38 +11,52 @@ import enum
 import types
 from typing import MutableMapping, NamedTuple, TypeAlias
 
-import numpy as np
 import pandas as pd
-
 
 from .typing import (
     TYPE_CHECKING,
     Any,
     ClassVar,
     Hashable,
+    HashableT,
     Iterable,
     Iterator,
     ListLike,
     Mapping,
+    MaskType,
+    MutableMapping,
+    NamedTuple,
     Protocol,
     Self,
     Sequence,
+    TypeAlias,
     TypeVar,
     overload,
-    MaskType,
 )
+from .utils import is_scalar
 
 _ENUM_ALIASES = "_aliases_"
-EnumT = TypeVar("EnumT", bound="_EnumSelf")
+_ENUM_DICT_RESERVED_KEYS = (
+    "__doc__",
+    "__module__",
+    "__qualname__",
+    #
+    "_order_",
+    "_create_pseudo_member_",
+    "_generate_next_value_",
+    "_missing_",
+    "_ignore_",
+)
+
 MemberMetadata: TypeAlias = MutableMapping[str, Any]
-EnumMetadata: TypeAlias = types.MappingProxyType[str, MemberMetadata]
-HashableT = TypeVar("HashableT", bound=Hashable)
+
 
 _Items: TypeAlias = list[Hashable] | pd.Index | pd.Series | slice | MaskType
 _T = TypeVar("_T")
-# type: ignore
 
-if TYPE_CHECKING:  # type: ignore
+
+EnumT = TypeVar("EnumT", bound="_EnumSelf")
+if TYPE_CHECKING:
 
     class _EnumSelf(Protocol):
         _data: ClassVar[pd.DataFrame]
@@ -70,7 +84,7 @@ if TYPE_CHECKING:  # type: ignore
             ...
 
         @classmethod
-        def map(cls, __x: Hashable | Iterable[Hashable]) -> list[Self]:
+        def remap(cls, __x: Hashable | Iterable[Hashable]) -> list[Self]:
             ...
 
     _S1 = TypeVar("_S1", bound=Any)
@@ -84,7 +98,7 @@ class _Field(NamedTuple):
     metadata: Mapping[str, Any]
 
 
-def auto_field(value: _T | Any = None, *, aliases: list[_T] | None = None, **metadata: Any) -> _T:
+def auto_field(value: _T | Any = None, *, aliases: list[_T] | None = None, **metadata: Any) -> Any:
     if value is None:
         value = enum.auto()
     if _ENUM_ALIASES in metadata and aliases is None:
@@ -94,7 +108,7 @@ def auto_field(value: _T | Any = None, *, aliases: list[_T] | None = None, **met
     else:
         metadata[_ENUM_ALIASES] = aliases or []
 
-    return _Field(value, metadata)  # type: ignore
+    return _Field(value, metadata)
 
 
 def _unpack_info(old: enum._EnumDict) -> tuple[enum._EnumDict, dict[str, Any]]:
@@ -107,39 +121,102 @@ def _unpack_info(old: enum._EnumDict) -> tuple[enum._EnumDict, dict[str, Any]]:
             new[key], meta[key] = value
         else:
             new[key] = value
+            if key not in _ENUM_DICT_RESERVED_KEYS:
+                meta[key] = {}
+
     return new, meta
 
 
 def _repack_info(
-    name: str, member_map: Mapping[str, enum.Enum], metadata: dict[str, dict[str, Any]]
-) -> tuple[pd.DataFrame, EnumMetadata]:
+    name: str, member_map: Mapping[str, enum.Enum], metadata: dict[str, dict[str, Any]], class_metadata: dict[str, Any]
+) -> types.MappingProxyType[str, Any]:
     data = {k: [v, *set(metadata[k].pop(_ENUM_ALIASES, []))] for k, v in member_map.items()}
     df = pd.DataFrame.from_dict(data, orient="index")
     df.index.name = "name"
 
     if df.duplicated().any():
         raise ValueError(f"Duplicate values found in {name}._member_map_.")
-    return df, types.MappingProxyType(collections.defaultdict(dict, metadata))
+
+    member_metadata = types.MappingProxyType(collections.defaultdict(dict, metadata))
+    return types.MappingProxyType(
+        {
+            "name": name,
+            "data": df,
+            "class_metadata": class_metadata,
+            "member_metadata": member_metadata,
+        }
+    )
+
+
+class Descriptor:
+    __getitem__: Any
+    _data: collections.defaultdict[int, Mapping]  # [int, types.MappingProxyType[str, Any]]
+
+    def __init__(self) -> None:
+        self._data = collections.defaultdict(dict, {})
+
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self
+        return self._data[hash(instance)]
+
+    def __set__(self, instance, value):
+        if instance is None:
+            raise TypeError("Cannot set a class attribute.")
+        self._data[hash(instance)] = value
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self._data})"
 
 
 class TableEnumMeta(enum.EnumMeta):
-    _data: pd.DataFrame
-    _metadata: EnumMetadata
+    __metadata__ = Descriptor()
+
+    def describe(cls) -> None:
+        for v in cls.__class__.__metadata__._data.values():  # type: ignore
+            print(
+                (
+                    f"""\
+{v['name']}:
+alias:
+{v['data']}
+member_metadata:
+{dict(v['member_metadata'])}
+class_metadata:
+{dict(v['class_metadata'])}\n"""
+                )
+            )
 
     def __new__(
         cls,
         name: str,
         bases: tuple[Any, ...],
         cls_dict: enum._EnumDict,
+        **kwargs: Any,
     ):
-        cls_dict, metadata = _unpack_info(cls_dict)
-
+        cls_dict, member_metadata = _unpack_info(cls_dict)
         obj = super().__new__(cls, name, bases, cls_dict)
         if obj._member_names_:
-            obj._data, obj._metadata = _repack_info(name, obj._member_map_, metadata)
+            obj.__metadata__ = _repack_info(name, obj._member_map_, member_metadata, kwargs)
 
         return obj
 
+    # =================================================================================================================
+    # - metadata properties
+    @property
+    def metadata(cls) -> MutableMapping[str, Any]:
+        return cls.__metadata__["class_metadata"]
+
+    @property
+    def _member_metadata(cls) -> types.MappingProxyType[str, MemberMetadata]:
+        return cls.__metadata__["member_metadata"]
+
+    @property
+    def _data(cls) -> pd.DataFrame:
+        return cls.__metadata__["data"]
+
+    # =================================================================================================================
+    # - dataframe properties
     @property
     def _names(cls) -> pd.Index[str]:
         return cls._data.index
@@ -158,6 +235,8 @@ class TableEnumMeta(enum.EnumMeta):
 
     def to_series(cls: type[EnumT]) -> Series[EnumT]:
         return cls._values.copy()
+
+    # =================================================================================================================
 
     if TYPE_CHECKING:
 
@@ -203,7 +282,8 @@ class TableEnumMeta(enum.EnumMeta):
         cls: type[EnumT],
         __items: Iterable[Hashable] | Hashable,
     ) -> EnumT | list[EnumT]:
-        if np.isscalar(__items):
+        """It is possible to return multiple members if the members share an alias."""
+        if is_scalar(__items):
             mask = (cls._data == __items).any(axis=1)
             if (names := cls._names[mask]).size == 0:
                 raise ValueError(f"{__items!r} is not a valid value for {cls.__name__}.")
@@ -229,9 +309,7 @@ class TableEnumMeta(enum.EnumMeta):
         mask = cls.is_in(__x)
         return cls._values[mask].to_list()
 
-    def remap(
-        cls: type[EnumT], __x: Iterable[HashableT]
-    ) -> dict[HashableT, EnumT] | dict[HashableT, EnumT | list[EnumT]]:
+    def remap(cls: type[EnumT], __x: Iterable[HashableT]) -> dict[HashableT, EnumT]:
         return {x: cls.__call__(x) for x in __x}
 
 
@@ -242,37 +320,4 @@ class TableEnum(enum.Enum, metaclass=TableEnumMeta):
 
     @property
     def metadata(self) -> MemberMetadata:
-        return self.__class__._metadata[self.name]
-
-
-def main() -> None:
-    class MyEnum(str, TableEnum):
-        A = auto_field("a", aliases=["alpha"], hello="world")
-        B = auto_field("b", aliases=["beta"])
-        C = auto_field("c", aliases=["beta"])
-        D = auto_field("d", aliases=[4, 5, 6])
-
-    assert MyEnum.A == "a"
-    assert MyEnum[["A", "B"]] == [MyEnum.A, MyEnum.B]
-    assert MyEnum["A"] == "a" == MyEnum.A == MyEnum("alpha")
-    assert MyEnum.A.metadata == {"hello": "world"}
-    try:
-        MyEnum._metadata["Z"] = {"a": 1}  # type: ignore
-        raise AssertionError("Should have raised.")
-    except TypeError:
-        pass
-    #
-    assert MyEnum.B.metadata == {}
-    MyEnum.B.metadata["a"] = 1
-    assert MyEnum.B.metadata == {"a": 1}
-    #
-    assert MyEnum.A.aliases == ["alpha"]
-    assert MyEnum[[True, False, True, False]] == [MyEnum.A, MyEnum.C]
-    assert MyEnum.remap(["alpha"]) == {"alpha": MyEnum.A}
-    assert MyEnum.remap(["beta"]) == {"beta": [MyEnum.B, MyEnum.C]}
-    assert MyEnum.remap([4]) == {4: MyEnum.D}
-    print(MyEnum.to_frame())
-
-
-if __name__ == "__main__":
-    main()
+        return self.__class__._member_metadata[self.name]
