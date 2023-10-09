@@ -60,6 +60,7 @@ from typing import (
     Annotated,
     Any,
     Callable,
+    ClassVar,
     Collection,
     Concatenate,
     Final,
@@ -79,27 +80,25 @@ from typing import (
     Union,
     cast,
     overload,
-    ClassVar,
 )
 
 import numpy as np
 import pandas as pd
-from pandas._typing import Scalar
 
 from ._typing import (
-    AnyArrayLike,
-    Array,
-    ArrayLike,
-    ListLike,
-    Nd,
-    NDArray,
-    NestedSequence,
-    TensorLike,
-    N,
     N1,
     N2,
     N3,
     N4,
+    AnyArrayLike,
+    Array,
+    ArrayLike,
+    ListLike,
+    N,
+    Nd,
+    NDArray,
+    NestedSequence,
+    TensorLike,
 )
 
 if sys.version_info <= (3, 9):
@@ -122,28 +121,28 @@ T_co = TypeVar("T_co", bound=Any, covariant=True)
 T_contra = TypeVar("T_contra", contravariant=True)
 
 
-EnumT = TypeVar("EnumT", bound="EnumType")
-HashKeyT = TypeVar("HashKeyT", bound="HashKeyLike")
+# EnumT = TypeVar("EnumT", bound="EnumType")
+# HashKeyT = TypeVar("HashKeyT", bound="HashKeyLike")
 Number: TypeAlias = int | float | np.number[Any]
 Boolean: TypeAlias = bool | np.bool_
 NumberT = TypeVar("NumberT", int, float, np.number[Any])
 
 
-PythonScalar = Union[str, float, bool]
-DatetimeLikeScalar = Union["pd.Period", "pd.Timestamp", "pd.Timedelta"]
-PandasScalar = Union["pd.Period", "pd.Timestamp", "pd.Timedelta", "pd.Interval"]
-Scalar = Union[PythonScalar, PandasScalar, np.datetime64, np.timedelta64, datetime.date]
+PythonScalar: TypeAlias = Union[str, float, bool]
+DatetimeLikeScalar: TypeAlias = Union["pd.Period", "pd.Timestamp", "pd.Timedelta"]
+PandasScalar: TypeAlias = Union["pd.Period", "pd.Timestamp", "pd.Timedelta", "pd.Interval"]
+Scalar: TypeAlias = Union[PythonScalar, PandasScalar, np.datetime64, np.timedelta64, datetime.date]
+MaskType: TypeAlias = Union["pd.Series[bool]", "NDArray[np.bool_]", list[bool]]
 
 Pair: TypeAlias = tuple[T, T]
 DictStr: TypeAlias = dict[str, T]
 DictStrAny: TypeAlias = DictStr[Any]
 StrPath: TypeAlias = "str | os.PathLike[str]"
 
+
 # =====================================================================================================================
 # - Protocols
 # =====================================================================================================================
-
-
 class Indices(Sized, Iterable[T_co], Protocol[T_co]):
     ...
 
@@ -159,41 +158,41 @@ class Shaped(Sized, Protocol):
         ...
 
 
-class EnumType(Hashable, Protocol[T]):
-    name: str
-    value: T
-    __iter__: Callable[..., Iterable[Self]]
+# class EnumType(Hashable, Protocol[T]):
+#     name: str
+#     value: T
+#     __iter__: Callable[..., Iterable[Self]]
 
-    @classmethod
-    def __len__(cls) -> int:
-        ...
+#     @classmethod
+#     def __len__(cls) -> int:
+#         ...
 
-    @classmethod
-    def __next__(cls) -> Self:
-        ...
+#     @classmethod
+#     def __next__(cls) -> Self:
+#         ...
 
-    @classmethod
-    def __getitem__(cls, name: str) -> Self:
-        ...
+#     @classmethod
+#     def __getitem__(cls, name: str) -> Self:
+#         ...
 
-    @classmethod
-    def __call__(cls, value: Any) -> Self:
-        ...
-
-
-class Comparable(Protocol[T_contra]):
-    def __ge__(self, __: T_contra) -> bool:
-        ...
-
-    def __gt__(self, __: T_contra) -> bool:
-        ...
-
-    def __le__(self, __: T_contra) -> bool:
-        ...
-
-    def __lt__(self, __: T_contra) -> bool:
-        ...
+#     @classmethod
+#     def __call__(cls, value: Any) -> Self:
+#         ...
 
 
-class HashKeyLike(Comparable[T_contra], Hashable, Protocol[T_contra]):
-    ...
+# class Comparable(Protocol[T_contra]):
+#     def __ge__(self, __: T_contra) -> bool:
+#         ...
+
+#     def __gt__(self, __: T_contra) -> bool:
+#         ...
+
+#     def __le__(self, __: T_contra) -> bool:
+#         ...
+
+#     def __lt__(self, __: T_contra) -> bool:
+#         ...
+
+
+# class HashKeyLike(Comparable[T_contra], Hashable, Protocol[T_contra]):
+#     ...

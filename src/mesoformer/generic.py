@@ -7,15 +7,19 @@ import queue
 import random
 import threading
 
+# _MetaCls: TypeAlias = "EnumMetaBase"
+# MetaT = TypeVar("MetaT", bound=_MetaCls)
+from typing import Any, Callable, Concatenate
+
 import numpy as np
-from torch.utils.data import IterableDataset
 import pandas as pd
-from .typing import (
+from torch.utils.data import IterableDataset
+
+from .typing import (  # EnumT,
     Any,
     ArrayLike,
     Concatenate,
     DictStrAny,
-    # EnumT,
     Final,
     Generic,
     Hashable,
@@ -29,27 +33,20 @@ from .typing import (
     Self,
     Sequence,
     T,
-    TypeVar,
     TypeAlias,
+    TypeVar,
     overload,
-    # EnumT,
 )
 from .utils import indent_kv, squish_map
-
-from typing import Callable
-
-# _MetaCls: TypeAlias = "EnumMetaBase"
-# MetaT = TypeVar("MetaT", bound=_MetaCls)
-from typing import Any
-from typing import Concatenate
 
 K = TypeVar("K", bound=Hashable)
 S = TypeVar("S")
 P = ParamSpec("P")
 
-import enum
-import pandas as pd
 import abc
+import enum
+
+import pandas as pd
 
 # from typing import Generic, TypeVar, Any, Callable, Iterable, Iterator, Hashable, Union, overload, TypeAlias, Mapping
 
@@ -59,7 +56,7 @@ _EnumNames: TypeAlias = str | Iterable[str] | Iterable[Iterable[str | Any]] | Ma
 
 EnumT = TypeVar("EnumT", bound=enum.Enum)
 
-from typing import Protocol, TypeVar, ClassVar
+from typing import ClassVar, Protocol, TypeVar
 
 _T = TypeVar("_T", bound=Hashable, covariant=True)
 

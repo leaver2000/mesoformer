@@ -1,36 +1,12 @@
 from __future__ import annotations
 
-
 import numpy as np
 import pandas as pd
+import pyresample.geometry
 import xarray as xr
 from xarray.core.coordinates import DatasetCoordinates
-import pyresample.geometry
 
-from typing import Any
-
-from typing import Final
-
-from .generic import Data
-from .typing import (
-    Hashable,
-    Iterable,
-    ListLike,
-    NDArray,
-    Number,
-    StrPath,
-    Sequence,
-    Array,
-    N,
-    Literal,
-    Mapping,
-    N,
-    N2,
-    N4,
-)
-from .utils import log_scale, sort_unique
 from .enums import (
-    TableEnum,
     COORDINATES,
     DIMENSIONS,
     LAT,
@@ -40,10 +16,30 @@ from .enums import (
     Coordinates,
     Dimensions,
     T,
+    TableEnum,
     X,
     Y,
     Z,
 )
+from .generic import Data
+from .typing import (
+    N2,
+    N4,
+    Any,
+    Array,
+    Final,
+    Hashable,
+    Iterable,
+    ListLike,
+    Literal,
+    Mapping,
+    N,
+    NDArray,
+    Number,
+    Sequence,
+    StrPath,
+)
+from .utils import log_scale, sort_unique
 
 P0 = 1013.25  # - mbar
 P1 = 25.0  # - mbar
@@ -173,7 +169,6 @@ def make_independent(ds: xr.Dataset) -> xr.Dataset:
     ds = ds.rename_vars(Coordinates.map(ds.coords))
     # ds = ds.rename_vars(Coordinates.map(ds.coords))
     ds[LON], ds[LAT] = (ds[coord].compute() for coord in (LON, LAT))
-    from typing import Any
 
     # - dimension assignment
     if missing := Dimensions.difference(ds.dims):

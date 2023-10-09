@@ -35,8 +35,16 @@ import dataclasses
 import enum
 import textwrap
 import types
-
-from typing import Iterable, Literal, TypeAlias, TypeVar, Mapping, Sequence, Any, Hashable
+from typing import (
+    Any,
+    Hashable,
+    Iterable,
+    Literal,
+    Mapping,
+    Sequence,
+    TypeAlias,
+    TypeVar,
+)
 
 import pandas as pd
 import pyproj

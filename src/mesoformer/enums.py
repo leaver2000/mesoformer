@@ -1,7 +1,8 @@
 """A mix of Abstract Base Classes and Generic Data Adapters for various data structures."""
 from __future__ import annotations
 
-from .enum_table import TableEnum, auto_field as field
+from .enum_table import TableEnum
+from .enum_table import auto_field as field
 
 
 class Table(str, TableEnum):

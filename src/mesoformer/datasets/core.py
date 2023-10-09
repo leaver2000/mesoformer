@@ -1,32 +1,28 @@
 from __future__ import annotations
 
+from typing import Final
 
 import numpy as np
 import pandas as pd
+import pyresample.geometry
 import xarray as xr
 from xarray.core.coordinates import DatasetCoordinates
-import pyresample.geometry
-
-from .metadata import CFDatasetEnum, DatasetMetadata
-
-from typing import Final
 
 from ..generic import Data
 from ..typing import (
+    N2,
+    N4,
+    Array,
     Hashable,
     Iterable,
     ListLike,
-    NDArray,
-    Number,
-    StrPath,
-    Sequence,
-    Array,
-    N,
     Literal,
     Mapping,
     N,
-    N2,
-    N4,
+    NDArray,
+    Number,
+    Sequence,
+    StrPath,
 )
 from ..utils import log_scale, sort_unique
 from .metadata import (
@@ -36,7 +32,9 @@ from .metadata import (
     LON,
     LVL,
     TIME,
+    CFDatasetEnum,
     Coordinates,
+    DatasetMetadata,
     Dimensions,
     T,
     X,
