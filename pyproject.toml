@@ -108,6 +108,7 @@ mesoscaler = ["py.typed", "*.pyi", "**/*.pyi", "static/*", "../pyproject.toml"]
 [tool.mypy]
 python_version = "3.10"
 platform = "linux"
+mypy_path = "src"
 warn_unused_ignores = true
 warn_redundant_casts = true
 ignore_missing_imports = true

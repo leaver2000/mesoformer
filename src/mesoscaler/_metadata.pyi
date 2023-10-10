@@ -1,0 +1,86 @@
+import enum
+import types
+
+import pandas as pd
+import pyproj
+
+from .typing import (
+    Any,
+    ClassVar,
+    Generic,
+    Hashable,
+    HashableT,
+    Iterable,
+    MutableMapping,
+    Self,
+    TypeVar,
+    overload,
+)
+
+LOC: str = ...
+CLASS_METADATA: str = ...
+MEMBER_METADATA: str = ...
+MEMBER_ALIASES: str = ...
+MEMBER_SERIES: str = ...
+
+_T = TypeVar("_T")
+
+class _EnumMetaCls(enum.EnumMeta):
+    __metadata__: ClassVar[MutableMapping[str, Any]]
+    @property
+    def metadata(self) -> MutableMapping[str, Any]: ...
+    @property
+    def aliases(self) -> list[Any]: ...
+    #
+    @property
+    def _series(self) -> pd.Series[Self]: ...  # type: ignore
+    @property
+    def _names(self) -> pd.Index[str]: ...
+    @property
+    def _member_metadata(self) -> types.MappingProxyType[str, Any]: ...
+    @property
+    def _aliases(self) -> pd.DataFrame: ...
+
+class _Loc(Generic[_T]):
+    @overload
+    def __getitem__(self, __item: str) -> _T: ...
+    @overload
+    def __getitem__(self, __item: list[str]) -> list[_T]: ...
+
+class TableEnum(enum.Enum, metaclass=_EnumMetaCls):
+    @property  # type: ignore
+    @classmethod
+    def loc(cls) -> _Loc[Self]: ...
+    @property
+    def metadata(self) -> MutableMapping[str, Any]: ...
+    @overload  # type: ignore
+    @classmethod
+    def __call__(cls, __items: Hashable) -> Self: ...
+    @overload
+    @classmethod
+    def __call__(cls, __items: Iterable[Hashable]) -> list[Self]: ...
+    # - methods
+    @classmethod
+    def to_series(cls) -> pd.Series[Self]: ...  # type: ignore
+    @classmethod
+    def to_frame(cls) -> bool: ...
+    @classmethod
+    def to_list(cls) -> list[Self]: ...
+    @classmethod
+    def is_in(cls, __x: Hashable | Iterable[Hashable], /) -> bool: ...
+    @classmethod
+    def difference(cls, __x: Hashable | Iterable[Hashable]) -> list[Self]: ...
+    @classmethod
+    def intersection(cls, __x: Hashable | Iterable[Hashable]) -> list[Self]: ...
+    @classmethod
+    def remap(cls, __x: Iterable[HashableT]) -> dict[HashableT, Self]: ...
+
+class IndependentVariables(str, TableEnum): ...
+
+class DependentVariables(IndependentVariables):
+    @property  # type: ignore
+    @classmethod
+    def crs(cls) -> pyproj.CRS: ...
+
+def auto_field(value: _T | Any = None, *, aliases: list[_T] | None = None, **metadata: Any) -> Any: ...
+def get_metadata() -> list[dict[str, Any]]: ...

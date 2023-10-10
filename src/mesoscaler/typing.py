@@ -121,13 +121,13 @@ else:
 # =====================================================================================================================
 P = ParamSpec("P")
 T = TypeVar("T", bound=Any)
-T_co = TypeVar("T_co", bound=Any, covariant=True)
-T_contra = TypeVar("T_contra", contravariant=True)
+_T_co = TypeVar("_T_co", bound=Any, covariant=True)
+_T_contra = TypeVar("_T_contra", contravariant=True)
 HashableT = TypeVar("HashableT", bound=Hashable)
 
 # - builtins
-Method = Callable[Concatenate[T, P], T_co]
-ClassMethod = Callable[Concatenate[type[T], P], T_co]
+Method = Callable[Concatenate[T, P], _T_co]
+ClassMethod = Callable[Concatenate[type[T], P], _T_co]
 Pair: TypeAlias = tuple[T, T]
 DictStr: TypeAlias = dict[str, T]
 DictStrAny: TypeAlias = DictStr[Any]
@@ -149,7 +149,7 @@ MaskType: TypeAlias = Union["pd.Series[bool]", "NDArray[np.bool_]", list[bool]]
 # =====================================================================================================================
 # - Protocols
 # =====================================================================================================================
-class Indices(Sized, Iterable[T_co], Protocol[T_co]):
+class Indices(Sized, Iterable[_T_co], Protocol[_T_co]):
     ...
 
 

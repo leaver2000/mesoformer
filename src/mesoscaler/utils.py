@@ -41,6 +41,7 @@ except NameError:
 
 from .typing import (
     Any,
+    AnyArrayLike,
     Array,
     Callable,
     Hashable,
@@ -61,8 +62,6 @@ from .typing import (
 _T1 = TypeVar("_T1")
 _T2 = TypeVar("_T2")
 
-T_co = TypeVar("T_co", covariant=True)
-T_contra = TypeVar("T_contra", contravariant=True)
 
 TensorT = TypeVar("TensorT", torch.Tensor, Array[..., Any])
 
@@ -81,6 +80,10 @@ def is_hashable(x: Any) -> TypeGuard[Hashable]:
 
 def is_scalar(x: Any) -> TypeGuard[np.generic | bool | int | float | complex | str | bytes | memoryview | enum.Enum]:
     return np.isscalar(x) or isinstance(x, enum.Enum)
+
+
+def is_array_like(x: Any) -> TypeGuard[AnyArrayLike]:
+    return hasattr(x, "ndim") and not is_scalar(x)
 
 
 # =====================================================================================================================
@@ -149,6 +152,10 @@ def sort_unique(x: ListLike[T]) -> NDArray[T]:
     return np.sort(np.unique(np.asanyarray(x)))
 
 
+# def sort_unique(x: T) -> T:
+#     is_array = isinstance(x, np.ndarray)
+#     y = sorted(set(x))
+#     return np.asanyarray(y) if isinstance(x, np.ndarray) else y
 def square_space(in_size: int, out_size: int) -> tuple[Pair[Array[[N], Any]], Pair[Array[[N, N], Any]]]:
     """
     >>> points, values = squarespace(4, 6)

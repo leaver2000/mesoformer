@@ -10,6 +10,8 @@ from torch.utils.data import IterableDataset
 
 from .typing import (
     Any,
+    AnyArrayLike,
+    Callable,
     DictStrAny,
     Final,
     Generic,
@@ -19,8 +21,49 @@ from .typing import (
     Mapping,
     Self,
     T,
+    TypeVar,
+    _T_co,
+    overload,
 )
-from .utils import indent_kv
+from .utils import indent_kv, is_array_like
+
+K = TypeVar("K")
+R = TypeVar("R")
+ListIndex = list[int] | list[bool] | list[str]
+
+
+class Loc(Generic[K, R]):
+    """
+    ```
+    s = pd.Series({"a": 1, "b": 2, "c": 3})  # type: pd.Series[int]
+    loc = Loc(functools.partial(np.asarray, dtype=np.float_), s)  # type: Loc[float, NDArray[np.float_]]
+    a = loc["a"]  # type: int
+    bc = loc[["b", "c"]]  # type: NDArray[np.float_]
+    arr = np.array([1, 2, 3]).astype(np.float_)  # type: NDArray[np.float_]
+    list_loc = Loc(list, arr)  # type: Loc[np.float_, list[np.float_]]
+    z = list_loc[0]  # type: np.float_
+    assert isinstance(z, np.floating)
+    x = list_loc[:]  # type: list[np.float_]
+    ```
+    """
+
+    def __init__(self, hook: Callable[[AnyArrayLike[_T_co]], R], x: AnyArrayLike[_T_co]) -> None:
+        self._data = x
+        self._hook = hook
+
+    @overload
+    def __getitem__(self, item: K) -> _T_co:
+        ...
+
+    @overload
+    def __getitem__(self, item: list[K | bool | Any]) -> R:
+        ...
+
+    def __getitem__(self, item: list[K | bool | Any]) -> _T_co | R:
+        x = self._data[item]  # type: ignore
+        if is_array_like(x):
+            return self._hook(x)
+        return x  # type: ignore
 
 
 class Data(Generic[T], abc.ABC):

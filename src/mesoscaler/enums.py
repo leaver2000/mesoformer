@@ -1,78 +1,7 @@
 """A mix of Abstract Base Classes and Generic Data Adapters for various data structures."""
 from __future__ import annotations
 
-from typing import Any, MutableMapping
-
-import pyproj
-
-from .enum_table import TableEnum, auto_field
-
-
-class IndependentVariables(str, TableEnum):
-    metadata: MutableMapping[str, Any]  # type: ignore
-
-    @staticmethod
-    def _generate_next_value_(name: str, *_):
-        return name
-
-    def __repr__(self):
-        return str(self.value)
-
-    def __str__(self):
-        return str(self.value)
-
-
-def get_crs(name: str) -> pyproj.CRS:
-    # TODO: move this to disk
-    if name == ERA5.__name__:
-        cf = {
-            "crs_wkt": 'GEOGCRS["WGS 84",ENSEMBLE["World Geodetic System 1984 ensemble",MEMBER["World Geodetic System 1984 (Transit)"],MEMBER["World Geodetic System 1984 (G730)"],MEMBER["World Geodetic System 1984 (G873)"],MEMBER["World Geodetic System 1984 (G1150)"],MEMBER["World Geodetic System 1984 (G1674)"],MEMBER["World Geodetic System 1984 (G1762)"],MEMBER["World Geodetic System 1984 (G2139)"],ELLIPSOID["WGS 84",6378137,298.257223563,LENGTHUNIT["metre",1]],ENSEMBLEACCURACY[2.0]],PRIMEM["Greenwich",0,ANGLEUNIT["degree",0.0174532925199433]],CS[ellipsoidal,2],AXIS["geodetic latitude (Lat)",north,ORDER[1],ANGLEUNIT["degree",0.0174532925199433]],AXIS["geodetic longitude (Lon)",east,ORDER[2],ANGLEUNIT["degree",0.0174532925199433]],USAGE[SCOPE["Horizontal component of 3D system."],AREA["World."],BBOX[-90,-180,90,180]],ID["EPSG",4326]]',
-            "geographic_crs_name": "WGS 84",
-            "semi_major_axis": 6378137.0,
-            "semi_minor_axis": 6356752.314245179,
-            "inverse_flattening": 298.257223563,
-            "reference_ellipsoid_name": "WGS 84",
-            "longitude_of_prime_meridian": 0.0,
-            "prime_meridian_name": "Greenwich",
-            "horizontal_datum_name": "World Geodetic System 1984 ensemble",
-            "grid_mapping_name": "latitude_longitude",
-        }
-    elif name == URMA.__name__:
-        cf = {
-            "geographic_crs_name": "NDFD CONUS 2.5km Lambert Conformal Conic",
-            "projected_crs_name": "NDFD",
-            "grid_mapping_name": "lambert_conformal_conic",
-            "semi_major_axis": 6378137.0,
-            "semi_minor_axis": 6356752.31424518,
-            "inverse_flattening": 298.25722356301,
-            "reference_ellipsoid_name": "WGS 84",
-            "longitude_of_prime_meridian": 0.0,
-            "prime_meridian_name": "Greenwich",
-            "horizontal_datum_name": "WGS84",
-            "latitude_of_projection_origin": 20.191999,
-            "longitude_of_projection_origin": 238.445999,
-            "standard_parallel": 25,
-            "false_easting": 0.0,
-            "false_northing": 0.0,
-            "units": "m",
-        }
-    else:
-        raise ValueError(f"Unknown CRS {name!r}")
-    return pyproj.CRS.from_cf(cf)
-
-
-class DependentVariables(IndependentVariables):
-    @classmethod  # type:ignore
-    @property
-    def crs(cls) -> pyproj.CRS:
-        md = cls.metadata
-        if "crs" not in md:
-            md["crs"] = get_crs(cls.__name__)
-
-        return md["crs"]
-
-
-# =====================================================================================================================
+from ._metadata import DependentVariables, IndependentVariables, auto_field
 
 
 class Dimensions(IndependentVariables):

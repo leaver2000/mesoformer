@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 from __future__ import annotations
 
 import numpy as np
@@ -162,25 +161,24 @@ def make_independent(ds: xr.Dataset) -> xr.Dataset:  # type:ignore
     """insures a dependant dataset is in the correct format."""
     if is_independent(ds):
         return ds
+    Dimensions.remap(ds.dims)
 
     ds = ds.rename_dims(Dimensions.remap(ds.dims))
-
     ds = ds.rename_vars(Coordinates.remap(ds.coords))
-
     ds = ds.set_coords(Coordinates.intersection(ds.variables))
     ds = ds.rename_vars(Coordinates.remap(ds.coords))
-
     ds = ds.rename_vars(Coordinates.remap(ds.coords))
+
     ds[LON], ds[LAT] = (ds[coord].compute() for coord in (LON, LAT))
 
     # - dimension assignment
-    if missing := Dimensions.difference(ds.dims):
-        for dim in missing:
+    if missing_dims := Dimensions.difference(ds.dims):
+        for dim in missing_dims:
             ds = ds.expand_dims(dim, axis=[DIMENSIONS.index(dim)])
 
     # # - coordinate assignment
-    if missing := Coordinates.difference(ds.coords):
-        assert missing == [LVL], missing
+    if missing_coords := Coordinates.difference(ds.coords):
+        assert missing_coords == [LVL], missing_coords
         ds = ds.assign_coords(DERIVED_SFC_COORDINATE)
 
     if ds[LAT].dims == (Y,) and ds[LON].dims == (X,):
@@ -253,7 +251,7 @@ class GriddedDataset(pyresample.geometry.GridDefinition):
     def from_dependant(cls, ds: xr.Dataset, dvars: Depends) -> GriddedDataset:
         return cls(make_independent(ds), dvars)
 
-    def to_array(self):
+    def to_array(self) -> xr.DataArray:
         return self.ds.to_array().transpose(X, Y, ...)
 
     # - dims
@@ -301,13 +299,13 @@ class GriddedDataset(pyresample.geometry.GridDefinition):
     #     )
     #     return area_def
 
-    # def get_coordinates(self: IndependentDataset) -> tuple[Array[[N, N], np.float_], Array[[N, N], np.float_]]:
+    # def ge_T_coordinates(self: IndependentDataset) -> tuple[Array[[N, N], np.float_], Array[[N, N], np.float_]]:
     #     lons = self.lons.to_numpy()
     #     lats = self.lats.to_numpy()
     #     lons = (lons + 180.0) % 360 - 180.0
     #     return lons, lats
 
     # def get_grid_definition(self: IndependentDataset) -> pyresample.geometry.GridDefinition:
-    #     lons, lats = self.get_coordinates()
+    #     lons, lats = self.ge_T_coordinates()
 
     #     return pyresample.geometry.GridDefinition(lons, lats)
