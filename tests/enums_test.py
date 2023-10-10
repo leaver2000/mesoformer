@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
-from src.mesoformer.enums import ERA5, Dimensions, URMA, Z, X, Y, LAT, LON, LVL, TIME, T
-from src.mesoformer.enum_table import TableEnum, auto_field
+from src.mesoscaler.enums import ERA5, Dimensions, URMA, Z, X, Y, LAT, LON, LVL, TIME, T
+from src.mesoscaler.enum_table import TableEnum, auto_field
 
 
 def test_coordinate_axes() -> None:

@@ -9,7 +9,7 @@ requires = ["setuptools", "wheel", "numpy>=1.23.4"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mesoformer"
+name = "mesoscaler"
 version = "0.0.1"
 requires-python = ">=3.10"
 description = "<TODO"
@@ -103,7 +103,7 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools.package-data]
-mesoformer = ["py.typed", "*.pyi", "**/*.pyi", "static/*", "../pyproject.toml"]
+mesoscaler = ["py.typed", "*.pyi", "**/*.pyi", "static/*", "../pyproject.toml"]
 
 [tool.mypy]
 python_version = "3.10"
@@ -119,8 +119,8 @@ testpaths = ["tests/"]
 
 [tool.coverage.run]
 branch = true
-source = ["src/mesoformer/"]
-omit = ["src/mesoformer/typing.py"]
+source = ["src/mesoscaler/"]
+omit = ["src/mesoscaler/typing.py"]
 
 [tool.coverage.report]
 ignore_errors = false

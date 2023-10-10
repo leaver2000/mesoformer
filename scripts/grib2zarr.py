@@ -6,8 +6,8 @@ import os
 
 import tqdm
 import xarray as xr
-from src.mesoformer.generic import CFDatasetEnum
-from src.mesoformer.datasets.urma.constants import (
+from src.mesoscaler.generic import CFDatasetEnum
+from src.mesoscaler.datasets.urma.constants import (
     CEILING,
     DEWPOINT_TEMPERATURE_2M,
     SPECIFIC_HUMIDITY_2M,
