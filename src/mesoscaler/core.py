@@ -41,6 +41,7 @@ from .typing import (
     StrPath,
 )
 from .utils import log_scale, sort_unique
+from .generic import Loc
 
 P0 = 1013.25  # - mbar
 P1 = 25.0  # - mbar
@@ -48,7 +49,7 @@ ERA5_GRID_RESOLUTION = 30.0  # km / px
 # RATE = ERA5_GRID_RESOLUTION / 2
 URMA_GRID_RESOLUTION = 2.5  # km / px
 MESOSCALE_BETA = 200.0  # km
-DEFAULT_PRESSURE: ListLike[Number] = [925.0, 850.0, 700.0, 500.0, 300.0]
+DEFAULT_PRESSURE: ListLike[Number] = [P0, 925.0, 850.0, 700.0, 500.0, 300.0]
 
 DERIVED_SFC_COORDINATE = {LVL: (LVL.axis, [P0])}
 
@@ -161,12 +162,10 @@ def make_independent(ds: xr.Dataset) -> xr.Dataset:  # type:ignore
     """insures a dependant dataset is in the correct format."""
     if is_independent(ds):
         return ds
-    Dimensions.remap(ds.dims)
-
-    ds = ds.rename_dims(Dimensions.remap(ds.dims))
-    ds = ds.rename_vars(Coordinates.remap(ds.coords))
+    #  - rename the dims and coordinates
+    ds = ds.rename_dims(Dimensions.remap(ds.dims)).rename_vars(Coordinates.remap(ds.coords))
+    # - move any coordinates assigned as variables to the coordinates
     ds = ds.set_coords(Coordinates.intersection(ds.variables))
-    ds = ds.rename_vars(Coordinates.remap(ds.coords))
     ds = ds.rename_vars(Coordinates.remap(ds.coords))
 
     ds[LON], ds[LAT] = (ds[coord].compute() for coord in (LON, LAT))
@@ -178,8 +177,9 @@ def make_independent(ds: xr.Dataset) -> xr.Dataset:  # type:ignore
 
     # # - coordinate assignment
     if missing_coords := Coordinates.difference(ds.coords):
-        assert missing_coords == [LVL], missing_coords
-        ds = ds.assign_coords(DERIVED_SFC_COORDINATE)
+        if missing_coords != {LVL}:
+            raise ValueError(f"missing coordinates {missing_coords}; only {LVL} is allowed to be missing!")
+        ds = ds.assign_coords(DERIVED_SFC_COORDINATE).set_xindex(LVL)
 
     if ds[LAT].dims == (Y,) and ds[LON].dims == (X,):
         # 5.2. Two-Dimensional Latitude, Longitude, Coordinate
@@ -213,6 +213,7 @@ class GriddedDataset(pyresample.geometry.GridDefinition):
         self.enum: Final = enum
         self.dvars: Final = dvars
         self.ds: Final = ds[dvars]
+        # self.loc = Loc(self.ds)
 
     @staticmethod
     def _validate_variables(dvars: Depends) -> tuple[type[DependentVariables], list[DependentVariables]]:

@@ -50,11 +50,6 @@ _T = TypeVar("_T")
 
 
 # =====================================================================================================================
-class _Field(NamedTuple):
-    value: Any
-    metadata: Mapping[str, Any]
-
-
 def auto_field(value: _T | Any = None, *, aliases: list[_T] | None = None, **metadata: Any) -> Any:
     if value is None:
         value = enum.auto()
@@ -68,18 +63,24 @@ def auto_field(value: _T | Any = None, *, aliases: list[_T] | None = None, **met
     return _Field(value, metadata)
 
 
-def _generate_metadata() -> Iterable[dict[str, Any]]:
-    metadata = getattr(_EnumMetaCls.__metadata__, "_data")  # type: Mapping[str, types.MappingProxyType[str, Any]]
-    for key, value in metadata.items():
-        data = {"hash": key} | dict(value)  # type: dict[str, Any]
-        data[MEMBER_SERIES] = dict(data.pop(MEMBER_SERIES))
-        data[MEMBER_METADATA] = dict(data.pop(MEMBER_METADATA))
-        data[MEMBER_ALIASES] = data.pop(MEMBER_ALIASES).to_dict(orient="records")
-        yield data
-
-
 def get_metadata() -> list[dict[str, Any]]:
-    return list(_generate_metadata())
+    metadata = getattr(_EnumMetaCls.__metadata__, "_data")  # type: Mapping[str, types.MappingProxyType[str, Any]]
+    items = ((key, dict(value)) for key, value in metadata.items())
+    return [
+        {
+            "hash": key,
+            CLASS_METADATA: dict(value[CLASS_METADATA]),
+            MEMBER_SERIES: dict(value[MEMBER_SERIES]),
+            MEMBER_METADATA: dict(value[MEMBER_METADATA]),
+            MEMBER_ALIASES: value[MEMBER_ALIASES].to_dict(orient="records"),
+        }
+        for key, value in items
+    ]
+
+
+class _Field(NamedTuple):
+    value: Any
+    metadata: Mapping[str, Any]
 
 
 def _unpack_info(old: enum._EnumDict) -> tuple[enum._EnumDict, dict[str, Any]]:
@@ -124,7 +125,7 @@ def _repack_info(
 
 
 # =====================================================================================================================
-class Descriptor:
+class _MetaDataDescriptor:
     __getitem__: Any
     _data: collections.defaultdict[int, Mapping[str, Any]]
 
@@ -146,7 +147,7 @@ class Descriptor:
 
 
 class _EnumMetaCls(enum.EnumMeta):
-    __metadata__ = Descriptor()
+    __metadata__ = _MetaDataDescriptor()
 
     def __new__(cls, name: str, bases: tuple[Any, ...], cls_dict: enum._EnumDict, **kwargs: Any):
         cls_dict, member_metadata = _unpack_info(cls_dict)
@@ -193,13 +194,11 @@ class _EnumMetaCls(enum.EnumMeta):
         return pd.Series(cls._member_map_, name=cls.__name__)
 
     # =================================================================================================================
-
     def __call__(cls, __items: Iterable[Hashable] | Hashable) -> Any | list[Any]:  # type: ignore[override]
         """It is possible to return multiple members if the members share an alias."""
         if is_scalar(__items):
             return cls._get_from_hashable(__items)  # type: ignore
-
-        return cls.intersection(__items)
+        return list(cls.intersection(__items))
 
     def _get_from_hashable(cls, __item: Hashable, /) -> Any:
         s = cls._series
@@ -216,15 +215,17 @@ class _EnumMetaCls(enum.EnumMeta):
     def is_in(cls, __x: Hashable | Iterable[Hashable], /) -> pd.Series[bool]:
         if isinstance(__x, Hashable):
             __x = [__x]
-        return cls._aliases.isin(__x).any(axis=0, skipna=True) | cls._names.isin(__x)
+        return cls._series.isin(__x) | cls._names.isin(__x) | cls._aliases.isin(__x).any(axis=0, skipna=True)
 
-    def difference(cls, __x: Hashable | Iterable[Hashable], /) -> list[Any]:
-        mask = ~cls.is_in(__x)
-        return cls.loc[mask]  # type: ignore
+    def difference(cls, __x: Hashable | Iterable[Hashable], /) -> set[Any]:
+        if isinstance(__x, Hashable):
+            __x = [__x]
+        return set(cls).difference(__x)
 
-    def intersection(cls, __x: Hashable | Iterable[Hashable], /):
-        mask = cls.is_in(__x)
-        return cls._series[mask].to_list()
+    def intersection(cls, __x: Hashable | Iterable[Hashable], /) -> set[Any]:
+        if isinstance(__x, Hashable):
+            __x = [__x]
+        return set(cls).intersection(__x)
 
     def remap(cls, __x: Iterable[HashableT], /):
         return {x: cls.__call__(x) for x in __x}
