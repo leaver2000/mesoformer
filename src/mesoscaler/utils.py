@@ -17,6 +17,8 @@ __all__ = [
     "load_toml",
     "tqdm",
 ]
+import collections
+import datetime
 import enum
 import functools
 import itertools
@@ -31,13 +33,16 @@ import pandas as pd
 import toml
 import torch
 from frozenlist import FrozenList
+from pandas._typing import DtypeObj
 from scipy.interpolate import RegularGridInterpolator
 
 try:
     get_ipython  # type: ignore
     import tqdm.notebook as tqdm
 except NameError:
-    import tqdm
+    import tqdm  # type: ignore
+except ImportError:
+    tqdm = None  # type: ignore
 
 from .typing import (
     Any,
@@ -48,6 +53,7 @@ from .typing import (
     Iterable,
     Iterator,
     ListLike,
+    Literal,
     Mapping,
     N,
     NDArray,
@@ -57,17 +63,39 @@ from .typing import (
     T,
     TypeGuard,
     TypeVar,
+    overload,
 )
 
+_NoDefault = enum.Enum("_NoDefault", "NoDefault")
+NO_DEFAULT = _NoDefault.NoDefault
+NoDefault = Literal[_NoDefault.NoDefault]
+del _NoDefault
 _T1 = TypeVar("_T1")
 _T2 = TypeVar("_T2")
 
 
-TensorT = TypeVar("TensorT", torch.Tensor, Array[..., Any])
+def is_ipython() -> bool:
+    try:
+        get_ipython  # type: ignore
+        return True
+    except NameError:
+        return False
+
+
+def has_attrs(x: Any, *attrs: str) -> bool:
+    return all(hasattr(x, attr) for attr in attrs)
+
+
+def is_sequence(x: Any) -> TypeGuard[Sequence]:
+    return not isinstance(x, (str, bytes)) and has_attrs(x, "__len__", "__iter__")
 
 
 def is_function(x: Any) -> TypeGuard[function]:
-    return not isinstance(x, type) and callable(x)
+    return isinstance(x, types.FunctionType)
+
+
+def is_enumtype(x: Any) -> TypeGuard[type[enum.Enum]]:
+    return isinstance(x, type) and issubclass(x, enum.Enum)
 
 
 def is_exception(x: Any) -> TypeGuard[type[Exception]]:
@@ -89,6 +117,9 @@ def is_array_like(x: Any) -> TypeGuard[AnyArrayLike]:
 # =====================================================================================================================
 # - array/tensor utils
 # =====================================================================================================================
+TensorT = TypeVar("TensorT", torch.Tensor, Array[..., Any])
+
+
 def normalize(x: TensorT) -> TensorT:
     """
     Normalize the input tensor along the specified dimensions.
@@ -152,10 +183,6 @@ def sort_unique(x: ListLike[T]) -> NDArray[T]:
     return np.sort(np.unique(np.asanyarray(x)))
 
 
-# def sort_unique(x: T) -> T:
-#     is_array = isinstance(x, np.ndarray)
-#     y = sorted(set(x))
-#     return np.asanyarray(y) if isinstance(x, np.ndarray) else y
 def square_space(in_size: int, out_size: int) -> tuple[Pair[Array[[N], Any]], Pair[Array[[N, N], Any]]]:
     """
     >>> points, values = squarespace(4, 6)
@@ -205,25 +232,9 @@ def interp_frames(
     return interp(values).astype(arr.dtype)
 
 
-def url_join(url: str, *args: str, allow_fragments: bool = True) -> str:
-    """
-    >>> from metformer.utils import url_join
-    >>> url_join('https://example.com', 'images', 'cats')
-    'https://example.com/images/cats'
-    >>> url_join('https://example.com', '/images')
-    'https://example.com/images'
-    >>> url_join('https://example.com/', 'images')
-    'https://example.com/images'
-    """
-    if not url.startswith("http"):
-        raise ValueError(f"invalid url: {url}")
-    return urllib.parse.urljoin(url, "/".join(x.strip("/") for x in args), allow_fragments=allow_fragments)
-
-    # =====================================================================================================================
-    # - repr utils
-    # =====================================================================================================================
-
-
+# =====================================================================================================================
+# - repr utils
+# =====================================================================================================================
 _array2string = functools.partial(
     np.array2string,
     max_line_width=72,
@@ -239,13 +250,23 @@ def indent_pair(k: str, v: Any, l_pad: int, prefix="  ") -> str:
     elif isinstance(v, pd.DataFrame):
         sep = "\n".ljust(l_pad)
         v = sep + sep.join(v.to_string().splitlines())
-    return textwrap.indent(f"{k.rjust(l_pad)}: {v}", prefix=prefix)
+    return textwrap.indent(f"{k.rjust(l_pad)}: {v!r}", prefix=prefix)
 
 
 def indent_kv(*args: tuple[str, Any], prefix="  ") -> list[str]:
     l_pad = max(len(k) for k, _ in args)
-
     return [indent_pair(k, v, l_pad, prefix) for k, v in args]
+
+
+def join_kv(head: tuple[Hashable, Any] | str, *args: tuple[Hashable, Any], sep="\n", prefix=" ") -> str:
+    if isinstance(head, tuple):
+        args = (head, *args)
+        head = ""
+    args_ = tuple((str(x), y) for x, y in args)
+    shift = max(len(k) for k, _ in args_)
+    text = sep.join(f"{key.rjust(shift)}: {value!r}" for key, value in args_)
+    body = textwrap.indent(text, prefix=prefix)
+    return sep.join([head, body])
 
 
 # =====================================================================================================================
@@ -282,20 +303,25 @@ def arange_slice(
 
 
 # =====================================================================================================================
-# - mapping utils
-# =====================================================================================================================
-def nested_proxy(data: Mapping[str, Any]) -> types.MappingProxyType[str, Any]:
-    return types.MappingProxyType({k: nested_proxy(v) if isinstance(v, Mapping) else v for k, v in data.items()})
-
-
-# =====================================================================================================================
 # - iterable utils
 # =====================================================================================================================
-def find(func: Callable[[_T1], bool], x: Iterable[_T1]) -> _T1:
+@overload
+def find(__func: Callable[[_T1], bool], __x: Iterable[_T1]) -> _T1:
+    ...
+
+
+@overload
+def find(__func: Callable[[_T1], bool], __x: Iterable[_T1], /, *, default: _T2) -> _T1 | _T2:
+    ...
+
+
+def find(__func: Callable[[_T1], bool], __x: Iterable[_T1], /, *, default: _T2 | NoDefault = NO_DEFAULT) -> _T1 | _T2:
     try:
-        return next(filter(func, x))
+        return next(filter(__func, __x))
     except StopIteration as e:
-        raise ValueError(f"no element in {x} satisfies {func}") from e
+        if default is not NO_DEFAULT:
+            return default
+        raise ValueError(f"no element in {__x} satisfies {__func}") from e
 
 
 def squish_iter(x: _T1 | Iterable[_T1]) -> Iterator[_T1]:
@@ -325,6 +351,55 @@ def squish_map(__func: Callable[[_T1], _T2], __iterable: _T1 | Iterable[_T1], /,
     """
 
     return map(__func, squish_chain(__iterable, *args))
+
+
+# =====================================================================================================================
+# - mapping utils
+# =====================================================================================================================
+
+
+def nested_proxy(data: Mapping[str, Any]) -> types.MappingProxyType[str, Any]:
+    return types.MappingProxyType({k: nested_proxy(v) if isinstance(v, Mapping) else v for k, v in data.items()})
+
+
+dtype_map = types.MappingProxyType(
+    collections.defaultdict(
+        lambda: pd.api.types.pandas_dtype("object"),
+        {
+            str: pd.api.types.pandas_dtype("string[pyarrow]"),
+            datetime.datetime: pd.api.types.pandas_dtype("datetime64[ns]"),
+            datetime.date: pd.api.types.pandas_dtype("datetime64[ns]"),
+            datetime.time: pd.api.types.pandas_dtype("datetime64[ns]"),
+            datetime.timedelta: pd.api.types.pandas_dtype("timedelta64[ns]"),
+        }
+        | {x: pd.api.types.pandas_dtype(x) for x in (int, float, bool, complex, bytes, memoryview)},
+    )
+)
+
+
+def get_enum_dtype(x: enum.Enum | type[enum.Enum]) -> DtypeObj:
+    """Resolve the dtype of an enum.
+
+    Args:
+        x (type[enum.Enum]): The enum to resolve.
+
+    Returns:
+        DtypeObj: The dtype of the enum.
+    """
+    if not isinstance(x, type):
+        x = type(x)
+    keys_ = dtype_map.keys()
+    if type_ := find(lambda t: t in keys_, x.mro(), default=None):
+        return dtype_map[type_]
+
+    return pd.api.types.pandas_dtype("category")
+
+
+def get_pandas_dtype(x) -> DtypeObj:
+    if isinstance(x, enum.Enum) or (isinstance(x, type) and issubclass(x, enum.Enum)):
+        return get_enum_dtype(x)
+
+    return pd.api.types.pandas_dtype(x)
 
 
 # =====================================================================================================================
@@ -363,3 +438,17 @@ def iter_jsonl(src: StrPath) -> Iterable[Any]:
     with open(src, "r") as f:
         for line in f:
             yield json.loads(line)
+
+
+def url_join(url: str, *args: str, allow_fragments: bool = True) -> str:
+    """
+    >>> url_join('https://example.com', 'images', 'cats')
+    'https://example.com/images/cats'
+    >>> url_join('https://example.com', '/images')
+    'https://example.com/images'
+    >>> url_join('https://example.com/', 'images')
+    'https://example.com/images'
+    """
+    if not url.startswith("http"):
+        raise ValueError(f"invalid url: {url}")
+    return urllib.parse.urljoin(url, "/".join(x.strip("/") for x in args), allow_fragments=allow_fragments)

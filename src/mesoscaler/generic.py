@@ -15,6 +15,7 @@ from .typing import (
     DictStrAny,
     Final,
     Generic,
+    Hashable,
     HashableT,
     Iterable,
     Iterator,
@@ -69,10 +70,10 @@ class Loc(Generic[K, R]):
 class Data(Generic[T], abc.ABC):
     @property
     @abc.abstractmethod
-    def data(self) -> Iterable[tuple[str, T]]:
+    def data(self) -> Iterable[tuple[Hashable, T]]:
         ...
 
-    def to_dict(self) -> dict[str, T]:
+    def to_dict(self) -> dict[Hashable, T]:
         return dict(self.data)
 
     def __repr__(self) -> str:
@@ -99,7 +100,7 @@ class DataMapping(Mapping[HashableT, T], Data[T]):
         return len(self._data)
 
 
-class DataWorker(Mapping[HashableT, T]):
+class DataWorker(Mapping[HashableT, T], Data[T]):
     __slots__ = ("_indices", "config")
 
     def __init__(self, *, indices: Iterable[HashableT], **config: Any) -> None:
@@ -117,9 +118,12 @@ class DataWorker(Mapping[HashableT, T]):
     def __iter__(self) -> Iterator[HashableT]:
         return iter(self._indices)
 
-    def __repr__(self) -> str:
+    @property
+    def data(self):
         x = self._indices
-        return f"{self.__class__.__name__}(indices=[{x[0]} ... {x[-1]}])"
+        return [
+            ("indices", f"[{x[0]} ... {x[-1]}]"),
+        ]
 
     def split(self, frac: float = 0.8) -> tuple[Self, Self]:
         cls = type(self)

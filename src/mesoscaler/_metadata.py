@@ -22,7 +22,7 @@ from .typing import (
     TypeAlias,
     TypeVar,
 )
-from .utils import is_scalar
+from .utils import get_pandas_dtype, is_scalar, join_kv
 
 LOC = "__mesometa_loc__"
 CLASS_METADATA = "__mesometa_cls_data__"
@@ -100,7 +100,11 @@ def _unpack_info(old: enum._EnumDict) -> tuple[enum._EnumDict, dict[str, Any]]:
 
 
 def _repack_info(
-    name: str, member_map: Mapping[str, enum.Enum], metadata: dict[str, dict[str, Any]], class_metadata: dict[str, Any]
+    name: str,
+    member_map: Mapping[str, enum.Enum],
+    metadata: dict[str, dict[str, Any]],
+    class_metadata: dict[str, Any],
+    dtype: Any,
 ) -> types.MappingProxyType[str, Any]:
     aliases = pd.DataFrame.from_dict(
         {k: list(set(metadata[k].pop(MEMBER_ALIASES, []))) for k in member_map.keys()}, orient="index"
@@ -109,8 +113,9 @@ def _repack_info(
     member_metadata = types.MappingProxyType(collections.defaultdict(dict, metadata))
     member_series = pd.Series(
         list(member_map.values()),
-        name=name,
         index=pd.Index(list(member_map.keys()), name="member_names", dtype="string"),
+        dtype=pd.CategoricalDtype(),
+        name=name,
     )
     return types.MappingProxyType(
         {
@@ -153,9 +158,12 @@ class _EnumMetaCls(enum.EnumMeta):
         cls_dict, member_metadata = _unpack_info(cls_dict)
         obj = super().__new__(cls, name, bases, cls_dict)
         if obj._member_names_:
-            obj.__metadata__ = _repack_info(name, obj._member_map_, member_metadata, kwargs)
+            obj.__metadata__ = _repack_info(name, obj._member_map_, member_metadata, kwargs, get_pandas_dtype(obj))
 
         return obj
+
+    def __repr__(cls):
+        return join_kv(cls.__name__, *cls._member_map_.items())
 
     # =================================================================================================================
     @property
@@ -184,10 +192,8 @@ class _EnumMetaCls(enum.EnumMeta):
 
     # =================================================================================================================
     # - metadata properties
-
     def to_frame(cls) -> pd.DataFrame:
         df = cls._aliases.copy()
-
         return df
 
     def to_series(cls) -> pd.Series[Any]:
@@ -198,7 +204,7 @@ class _EnumMetaCls(enum.EnumMeta):
         """It is possible to return multiple members if the members share an alias."""
         if is_scalar(__items):
             return cls._get_from_hashable(__items)  # type: ignore
-        return list(cls.intersection(__items))
+        return cls.loc[cls.is_in(__items)]  # type: ignore
 
     def _get_from_hashable(cls, __item: Hashable, /) -> Any:
         s = cls._series
@@ -213,19 +219,16 @@ class _EnumMetaCls(enum.EnumMeta):
         return cls._series.to_list()
 
     def is_in(cls, __x: Hashable | Iterable[Hashable], /) -> pd.Series[bool]:
-        if isinstance(__x, Hashable):
-            __x = [__x]
+        # if the child enum is a tuple we dont want to iter __x
+        __x = list([__x] if type(__x) in cls.mro() or isinstance(__x, Hashable) else __x)  # type:ignore
+
         return cls._series.isin(__x) | cls._names.isin(__x) | cls._aliases.isin(__x).any(axis=0, skipna=True)
 
     def difference(cls, __x: Hashable | Iterable[Hashable], /) -> set[Any]:
-        if isinstance(__x, Hashable):
-            __x = [__x]
-        return set(cls).difference(__x)
+        return set(cls).difference(cls(__x))
 
     def intersection(cls, __x: Hashable | Iterable[Hashable], /) -> set[Any]:
-        if isinstance(__x, Hashable):
-            __x = [__x]
-        return set(cls).intersection(__x)
+        return set(cls).intersection(cls(__x))
 
     def remap(cls, __x: Iterable[HashableT], /):
         return {x: cls.__call__(x) for x in __x}

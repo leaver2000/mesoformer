@@ -13,7 +13,6 @@ from .typing import (
     Iterable,
     MutableMapping,
     Self,
-    Sequence,
     TypeVar,
     overload,
 )
@@ -26,15 +25,16 @@ MEMBER_SERIES: str = ...
 
 _T = TypeVar("_T")
 
-class _EnumMetaCls(enum.EnumMeta):
+class _EnumMetaCls(Generic[_T], enum.EnumMeta):
     __metadata__: ClassVar[MutableMapping[str, Any]]
     @property
     def metadata(self) -> MutableMapping[str, Any]: ...
     @property
     def aliases(self) -> list[Any]: ...
-    #
+    # #
+    # def __new__(cls, name: str, bases: tuple[type[_T], ...], cls_dict: enum._EnumDict, **kwargs: Any): ...
     @property
-    def _series(self) -> pd.Series[Self]: ...  # type: ignore
+    def _series(self) -> pd.Series[enum.Enum]: ...  # type: ignore
     @property
     def _names(self) -> pd.Index[str]: ...
     @property
@@ -60,21 +60,22 @@ class TableEnum(enum.Enum, metaclass=_EnumMetaCls):
     @overload
     @classmethod
     def __call__(cls, __items: Iterable[Hashable]) -> list[Self]: ...
-    # - methods
+    # - methods[search]
     @classmethod
-    def to_series(cls) -> pd.Series[Self]: ...  # type: ignore
-    @classmethod
-    def to_frame(cls) -> pd.DataFrame: ...
-    @classmethod
-    def to_list(cls) -> list[Self]: ...
-    @classmethod
-    def is_in(cls, __x: Hashable | Iterable[Hashable], /) -> Sequence[bool]: ...
+    def is_in(cls, __x: Hashable | Iterable[Hashable], /) -> pd.Series[bool]: ...
     @classmethod
     def difference(cls, __x: Hashable | Iterable[Hashable]) -> set[Self]: ...
     @classmethod
     def intersection(cls, __x: Hashable | Iterable[Hashable]) -> set[Self]: ...
     @classmethod
     def remap(cls, __x: Iterable[HashableT]) -> dict[HashableT, Self]: ...
+    # - methods[transfer]
+    @classmethod
+    def to_series(cls) -> pd.Series[Self]: ...  # type: ignore
+    @classmethod
+    def to_frame(cls) -> pd.DataFrame: ...
+    @classmethod
+    def to_list(cls) -> list[Self]: ...
 
 class IndependentVariables(str, TableEnum): ...
 

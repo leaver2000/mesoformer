@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 from __future__ import annotations
 
 __all__ = [
@@ -20,32 +21,34 @@ if typing.TYPE_CHECKING:
 
     _P = typing.ParamSpec("_P")
     _T = typing.TypeVar("_T", bound=typing.Any)
-    __T_co = typing.TypeVar("__T_co", bound=typing.Any, covariant=True)
-    # __T_contra = typing.TypeVar("__T_contra", bound=typing.Any, contravariant=True)
+    _T_co = typing.TypeVar("_T_co", bound=typing.Any, covariant=True)
     _Numpy_T_co = typing.TypeVar("_Numpy_T_co", covariant=True, bound=np.generic)
 
-    class Nd(typing.Concatenate[_P]):  # type: ignore[misc]
+    class Nd(typing.Concatenate[_P]):
         ...
 
-    Array = np.ndarray[Nd[_P], np.dtype[_Numpy_T_co]]
+    # - typing.TypeAlias
+    Array: typing.TypeAlias = np.ndarray[Nd[_P], np.dtype[_Numpy_T_co]]
     """>>> x: Array[[int,int], np.int_] = np.array([[1, 2, 3]]) # Array[(int,int), int]"""
-    NDArray = Array[..., _Numpy_T_co]
+    NDArray: typing.TypeAlias = Array[..., _Numpy_T_co]
     ArrayLike: typing.TypeAlias = typing.Union[ExtensionArray, Array[..., _Numpy_T_co]]
     AnyArrayLike: typing.TypeAlias = typing.Union[ArrayLike[_T], pd.Index[_T], pd.Series[_T]]
-    List = list[_T | typing.Any]
-    ListLike = typing.Union[AnyArrayLike[_T], List[_T]]
-    TensorLike = typing.Union[Array[_P, __T_co], NDArray[__T_co], torch.Tensor]
-    N = typing.NewType(":", typing.Any)  # type: ignore[misc]
-    N1 = typing.NewType("1", typing.Any)  # type: ignore[misc]
-    N2 = typing.NewType("2", typing.Any)  # type: ignore[misc]
-    N3 = typing.NewType("3", typing.Any)  # type: ignore[misc]
-    N4 = typing.NewType("4", typing.Any)  # type: ignore[misc]
+    List: typing.TypeAlias = list[_T | typing.Any]
+    ListLike: typing.TypeAlias = typing.Union[AnyArrayLike[_T], List[_T]]
+    TensorLike: typing.TypeAlias = typing.Union[Array[_P, _T_co], NDArray[_T_co], torch.Tensor]
+
+    # - typing.NewType
+    N = typing.NewType(":", typing.Any)
+    N1 = typing.NewType("1", typing.Any)
+    N2 = typing.NewType("2", typing.Any)
+    N3 = typing.NewType("3", typing.Any)
+    N4 = typing.NewType("4", typing.Any)
 
 
 else:
     import numpy.typing as npt
 
-    NestedSequence = typing.List  # NestedSequence[int]
+    NestedSequence = typing.Sequence  # NestedSequence[int]
     Nd = typing.Tuple  # Nd[int, int, ...]
     Array = typing.Callable  # Array[[int,int], np.int_]
     NDArray = npt.NDArray
