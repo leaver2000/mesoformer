@@ -48,13 +48,9 @@ def test_my_enum() -> None:
     assert MyEnum.A == "a"
     assert MyEnum.loc[["A", "B"]] == [MyEnum.A, MyEnum.B]
     assert MyEnum["A"] == "a" == MyEnum.A == MyEnum("alpha")
-    print(MyEnum.A.metadata)
-    # assert MyEnum.A.metadata == {"hello": "world"}
 
 
 def test_my_enum_metadata() -> None:
-    print(_EnumMetaCls.__metadata__)
-    # assert set(MyEnum.__metadata__.keys()) == {"name", "member_metadata", "data", "class_metadata"}  # type: ignore
     assert MyEnum.__metadata__["name"] == "MyEnum"
 
 
@@ -69,14 +65,3 @@ def test_member_metadata() -> None:
 
     mm = MyEnum._member_metadata
     assert MyEnum.__metadata__[MEMBER_METADATA] is mm
-    # assert mm == {"A": {"hello": "world"}, "B": {}, "C": {}, "D": {}}
-
-    # with pytest.raises(TypeError):
-    #     # new metadata can't be added to the individual members
-    #     mm["A"] = {"a": 1}  # type: ignore
-    # # with pytest.raises(TypeError):
-    # #     # and the data cannot be changed
-    # #     mm["A"]["hello"] = "mars"  # type: ignore
-
-    # assert mm["A"] == {"hello": "world"} == MyEnum.A.metadata
-    # assert MyEnum.B.metadata == {}
