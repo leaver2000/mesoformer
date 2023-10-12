@@ -264,7 +264,7 @@ class DependentDataset(IndependentDataset):
 # =====================================================================================================================
 
 
-def _sample_iterator(scale: Mesoscale, *dsets: DependentDataset) -> Iterator[ResampleInstruction]:
+def _instruction_iterator(scale: Mesoscale, *dsets: DependentDataset) -> Iterator[ResampleInstruction]:
     levels = np.concatenate([ds.level for ds in dsets])
     levels = np.sort(levels[np.isin(levels, scale.hpa)])[::-1]
     datasets = (ds.sel({LVL: [lvl]}) for lvl in levels for ds in dsets if lvl in ds.level)
@@ -356,7 +356,22 @@ class Mesoscale(Data[NDArray[np.float_]]):
         return np.c_[-xy, xy]
 
     def resample(self, *dsets: DependentDataset, height: int = 80, width: int = 80) -> ReSampleGenerator:
-        return ReSampleGenerator(_sample_iterator(self, *dsets), height=height, width=width)
+        return ReSampleGenerator(_instruction_iterator(self, *dsets), height=height, width=width)
+
+
+_laea = {
+    "proj": "laea",
+    "x_0": 0,
+    "y_0": 0,
+    "ellps": "WGS84",
+    "units": "m",
+    "no_defs": None,
+    "type": "crs",
+}
+
+
+def lambert_equal_area(longitude: float, latitude: float) -> pyproj.CRS:
+    return pyproj.CRS(_laea | {"lat_0": latitude, "lon_0": longitude})
 
 
 class ReSampleGenerator:
@@ -368,7 +383,7 @@ class ReSampleGenerator:
         height: int = 80,
         width: int = 80,
     ) -> None:
-        self._it = iter(it)
+        self._instruction = iter(it)
         self.height = height
         self.width = width
 
@@ -376,7 +391,7 @@ class ReSampleGenerator:
     def create(
         cls, scale: Mesoscale, *dsets: DependentDataset, height: int = 80, width: int = 80
     ) -> ReSampleGenerator:
-        return cls(_sample_iterator(scale, *dsets), height=height, width=width)
+        return cls(_instruction_iterator(scale, *dsets), height=height, width=width)
 
     def _generate(
         self,
@@ -388,7 +403,7 @@ class ReSampleGenerator:
         arr = np.stack(
             [
                 __func(ds.grid_definition, ds.sel({TIME: time}), partial(area_extent=area_extent))
-                for ds, area_extent in self._it
+                for ds, area_extent in self._instruction
             ],
         )
         # - reshape the data
@@ -411,19 +426,7 @@ class ReSampleGenerator:
             "",
             width=self.width,
             height=self.height,
-            projection=pyproj.CRS(
-                {
-                    "proj": "laea",
-                    "lat_0": latitude,
-                    "lon_0": longitude,
-                    "x_0": 0,
-                    "y_0": 0,
-                    "ellps": "WGS84",
-                    "units": "m",
-                    "no_defs": None,
-                    "type": "crs",
-                }
-            ),
+            projection=lambert_equal_area(longitude, latitude),
         )
         return self._generate(self._resample_nearest, partial, time)
 
