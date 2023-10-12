@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import itertools
+import functools
 
 import numpy as np
 import pandas as pd
@@ -10,7 +10,6 @@ import xarray as xr
 from xarray.core.coordinates import DatasetCoordinates
 
 from .enums import (
-    COORDINATES,
     DIMENSIONS,
     LAT,
     LON,
@@ -24,29 +23,35 @@ from .enums import (
     Y,
     Z,
 )
-from .generic import Data, DataWorker
+from .generic import Data
 from .typing import (
     N2,
     N4,
     Any,
     Array,
-    Final,
+    Callable,
     Hashable,
     Iterable,
+    Iterator,  # type:ignore
     ListLike,
-    Literal,
+    Literal,  # type:ignore
     Mapping,
     N,
     NDArray,
     Number,
-    Sequence,
-    StrPath,
+    Self,
+    Slice,
     TypeAlias,
+    Sequence,  # noqa
 )
 from .utils import log_scale, sort_unique
 
-Depends = type[DependentVariables] | DependentVariables | Sequence[DependentVariables]
-
+AreaExtent: TypeAlias = Array[[N4], np.float_]  # type:ignore
+Definition: TypeAlias = pyresample.geometry.BaseDefinition
+Depends: TypeAlias = "type[DependentVariables] | DependentVariables | Sequence[DependentVariables] | Dependencies"
+ResampleInstruction: TypeAlias = "tuple[DependentDataset, AreaExtent]"
+Unit = Literal["km", "m"]
+# =====================================================================================================================
 P0 = 1013.25  # - mbar
 P1 = 25.0  # - mbar
 ERA5_GRID_RESOLUTION = 30.0  # km / px
@@ -54,37 +59,74 @@ ERA5_GRID_RESOLUTION = 30.0  # km / px
 URMA_GRID_RESOLUTION = 2.5  # km / px
 MESOSCALE_BETA = 200.0  # km
 DEFAULT_PRESSURE: ListLike[Number] = [P0, 925.0, 850.0, 700.0, 500.0, 300.0]
-
-AreaExtent: TypeAlias = Array[[N4], np.float_]  # type: ignore
-
-Unit = Literal["km", "m"]
+DERIVED_SFC_COORDINATE = {LVL: (LVL.axis, [P0])}
 _units: Mapping[Unit, float] = {"km": 1.0, "m": 1000.0}
-
 CHANNELS = "channels"
 VARIABLES = "variable"
 _GRID_DEFINITION = "grid_definition"
+_DEPENDS = "depends"
 
 
 # =====================================================================================================================
 # - tools for preparing to data into a common format and convention
 # =====================================================================================================================
-DERIVED_SFC_COORDINATE = {LVL: (LVL.axis, [P0])}
+class Dependencies:
+    @staticmethod
+    def _validate_variables(depends: Depends) -> tuple[type[DependentVariables], list[DependentVariables]]:
+        if isinstance(depends, Dependencies):
+            return depends.enum, depends.depends
+        elif isinstance(depends, type):
+            assert issubclass(depends, DependentVariables)
+            enum = depends
+            depends = list(depends)  # type: ignore
+        elif isinstance(depends, DependentVariables):
+            enum = depends.__class__
+            depends = [depends]
+        else:
+            enum = depends[0].__class__
+            depends = list(depends)
+
+        for dvar in depends:
+            assert isinstance(dvar, enum)
+        return enum, depends
+
+    def __init__(self, depends: Depends):
+        self.enum, self.depends = self._validate_variables(depends)
+
+    @property
+    def difference(self) -> set[DependentVariables]:
+        return self.enum.difference(self.depends)
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self.enum.__name__})"
+
+    @property
+    def names(self) -> pd.Index[str]:
+        return self.enum._names
+
+    @property
+    def crs(self) -> pyproj.CRS:
+        return self.enum.crs  # type: ignore
+
+    @property
+    def metadata(self) -> Mapping[str, Any]:
+        return self.enum.metadata  # type: ignore
 
 
 def is_dimension_independent(dims: Iterable[Hashable]) -> bool:
-    return all(isinstance(dim, Dimensions) for dim in dims) and tuple(dims) == DIMENSIONS
+    return all(isinstance(dim, Dimensions) for dim in dims) and set(dims) == set(Dimensions)
 
 
 def is_coordinate_independent(coords: DatasetCoordinates) -> bool:
     return (
         all(isinstance(coord, Coordinates) for coord in coords)
-        and set(coords) == set(COORDINATES)
+        and set(coords) == set(Coordinates)
         and all(coords[x].dims == (Y, X) for x in (LON, LAT))
     )
 
 
 def is_independent(ds: xr.Dataset) -> bool:
-    return is_dimension_independent(ds.dims) and is_coordinate_independent(ds.coords) and _GRID_DEFINITION in ds.attrs
+    return is_coordinate_independent(ds.coords) and is_dimension_independent(ds.dims)
 
 
 def make_independent(ds: xr.Dataset) -> xr.Dataset:  # type:ignore
@@ -124,155 +166,112 @@ def make_independent(ds: xr.Dataset) -> xr.Dataset:  # type:ignore
 
     ds = ds.transpose(*DIMENSIONS)
 
-    if _GRID_DEFINITION not in ds.attrs:
-        lons, lats = (ds[x].to_numpy() for x in (LON, LAT))
-        lons = (lons + 180.0) % 360 - 180.0
-        ds.attrs[_GRID_DEFINITION] = pyresample.geometry.GridDefinition(lons, lats)
-
-    assert is_independent(ds)
     return ds
 
 
 # =====================================================================================================================
 #
 # =====================================================================================================================
-class IndependentDataset:
-    def __init__(self, ds: xr.Dataset) -> None:
-        assert is_independent(ds)
-        self.ds: Final = ds
+class IndependentDataset(xr.Dataset):
+    __slots__ = ()
+
+    @classmethod
+    def from_dependant(cls, ds: xr.Dataset, **kwargs) -> Self:
+        return cls(make_independent(ds), **kwargs)
 
     # - dims
     @property
     def t(self) -> xr.DataArray:
-        return self.ds[T]
+        return self[T]
 
     @property
     def z(self) -> xr.DataArray:
-        return self.ds[Z]
+        return self[Z]
 
     @property
     def y(self) -> xr.DataArray:
-        return self.ds[Y]
+        return self[Y]
 
     @property
     def x(self) -> xr.DataArray:
-        return self.ds[X]
+        return self[X]
 
     # - coords
     @property
     def time(self) -> xr.DataArray:
-        return self.ds[TIME]
+        return self[TIME]
 
     @property
     def level(self) -> xr.DataArray:
-        return self.ds[LVL]
+        return self[LVL]
 
     @property
     def lats(self) -> xr.DataArray:
-        return self.ds[LAT]
+        return self[LAT]
 
     @property
     def lons(self) -> xr.DataArray:
-        return self.ds[LON]
-
-    # - attributes
-    @property
-    def grid_definition(self) -> pyresample.geometry.GridDefinition:
-        return self.ds.attrs[_GRID_DEFINITION]
-
-    def get_level(self, level: float) -> xr.Dataset:
-        return self.ds.sel({LVL: [level]})
-
-    def to_array(self) -> xr.DataArray:
-        return self.ds.to_array().transpose(X, Y, ...)
-
-    def __repr__(self) -> str:
-        return self.ds.__repr__()
-
-    def _repr_html_(self) -> str:
-        return self.ds._repr_html_()
+        return self[LON]
 
 
 class DependentDataset(IndependentDataset):
-    def __init__(self, ds: xr.Dataset, depends: Depends) -> None:
-        enum, depends = self._validate_variables(depends)
-        super().__init__(ds[depends])
-        self.enum: Final = enum
-        self.depends: Final = depends
+    __slots__ = ()
+    __dims__ = (T, Z, Y, X)
+    __coords__ = (TIME, LVL, LAT, LON)
 
-    @staticmethod
-    def _validate_variables(depends: Depends) -> tuple[type[DependentVariables], list[DependentVariables]]:
-        if isinstance(depends, type):
-            assert issubclass(depends, DependentVariables)
-            enum = depends
-            depends = list(depends)  # type: ignore
-        elif isinstance(depends, DependentVariables):
-            enum = depends.__class__
-            depends = [depends]
-        else:
-            enum = depends[0].__class__
-            depends = list(depends)
+    def __init__(
+        self,
+        data: xr.Dataset,
+        *,
+        depends: Depends | None = None,
+        attrs: Mapping[str, Any] | None = None,
+    ):
+        if isinstance(data, DependentDataset) and attrs is None:
+            attrs = {
+                _GRID_DEFINITION: data.grid_definition,
+                _DEPENDS: data.depends,
+            }
+        super().__init__(data, attrs=attrs)
+        if depends is not None:
+            self.attrs[_DEPENDS] = depends
 
-        for dvar in depends:
-            assert isinstance(dvar, enum)
-        return enum, depends
-
-    @property
-    def names(self) -> pd.Index[str]:
-        return self.enum._names
-
-    @property
-    def crs(self) -> pyproj.CRS:
-        return self.enum.crs  # type: ignore
-
-    @property
-    def metadata(self) -> Mapping[str, Any]:
-        return self.enum.metadata  # type: ignore
+        if _GRID_DEFINITION not in self.attrs:
+            lons, lats = (self[x].to_numpy() for x in (LON, LAT))
+            lons = (lons + 180.0) % 360 - 180.0
+            self.attrs[_GRID_DEFINITION] = pyresample.geometry.GridDefinition(lons, lats)
+        assert is_independent(self)
 
     @classmethod
-    def from_zarr(cls, path: StrPath, depends: Depends) -> DependentDataset:
-        return cls.from_dependant(xr.open_zarr(path), depends)
-
-    @classmethod
-    def from_dependant(cls, ds: xr.Dataset, depends: Depends) -> DependentDataset:
-        return cls(make_independent(ds), depends)
-
-
-class Payload(IndependentDataset):
-    def __init__(self, ds: xr.Dataset, area_extent: Array[[N4], np.float_]) -> None:
-        super().__init__(ds)
-        self.area_extent = area_extent
-
-
-class ReSamplerGenerator(DataWorker[int, xr.DataArray]):
-    def __init__(self, payloads: Iterable[Payload]) -> None:
-        payloads = list(payloads)
-        super().__init__(indices=range(payloads.__len__()))
-        self.payloads = payloads
-
-    def __getitem__(self, index: int):
-        return
-
-    def start(self):
-        ...
-
-    @classmethod
-    def starmap(cls, __iterable: Iterable[tuple[xr.Dataset, Array[[N4], np.float_]]]) -> ReSamplerGenerator:
-        return cls(itertools.starmap(Payload, __iterable))
+    def from_zarr(
+        cls,
+        store: Any,
+        depends: Depends,
+    ) -> DependentDataset:
+        depends = Dependencies(depends)
+        return cls.from_dependant(xr.open_zarr(store, drop_variables=depends.difference), depends=depends)
 
     @property
-    def data(self):
-        return super().data + [("payloads", self.payloads)]
+    def grid_definition(self) -> pyresample.geometry.GridDefinition:
+        return self.attrs[_GRID_DEFINITION]
 
-    def _resample_on_center(
-        self, source: IndependentDataset, target: pyresample.geometry.AreaDefinition
-    ) -> np.ndarray:
-        return pyresample.kd_tree.resample_nearest(
-            source.grid_definition, source.to_array(), target, radius_of_influence=50000
-        )
+    @property
+    def depends(self) -> Dependencies:
+        return self.attrs[_DEPENDS]
 
 
 # =====================================================================================================================
+# Resampling
+# =====================================================================================================================
+
+
+def _sample_iterator(scale: Mesoscale, *dsets: DependentDataset) -> Iterator[ResampleInstruction]:
+    levels = np.concatenate([ds.level for ds in dsets])
+    levels = np.sort(levels[np.isin(levels, scale.hpa)])[::-1]
+    datasets = (ds.sel({LVL: [lvl]}) for lvl in levels for ds in dsets if lvl in ds.level)
+    extents = scale.stack_extent() * 1000.0  # km -> m
+    return zip(datasets, extents)
+
+
 class Mesoscale(Data[NDArray[np.float_]]):
     def __init__(
         self,
@@ -356,60 +355,87 @@ class Mesoscale(Data[NDArray[np.float_]]):
         xy = self.to_numpy(units=units)
         return np.c_[-xy, xy]
 
-    def resample(self, *dsets: IndependentDataset) -> ReSamplerGenerator:
-        levels = np.concatenate([ds.level for ds in dsets])
-        levels = np.sort(levels[np.isin(levels, self.hpa)])[::-1]
-        datasets = (ds.get_level(lvl) for ds in dsets for lvl in levels if lvl in ds.level)
-        return ReSamplerGenerator.starmap(zip(datasets, self.stack_extent()))
+    def resample(self, *dsets: DependentDataset, height: int = 80, width: int = 80) -> ReSampleGenerator:
+        return ReSampleGenerator(_sample_iterator(self, *dsets), height=height, width=width)
 
-    # # - dims
-    # @property
-    # def t(self) -> xr.DataArray:
-    #     return self.ds[T]
 
-    # @property
-    # def z(self) -> xr.DataArray:
-    #     return self.ds[Z]
+class ReSampleGenerator:
+    def __init__(
+        self,
+        it: Iterator[ResampleInstruction],
+        /,
+        *,
+        height: int = 80,
+        width: int = 80,
+    ) -> None:
+        self._it = iter(it)
+        self.height = height
+        self.width = width
 
-    # @property
-    # def y(self) -> xr.DataArray:
-    #     return self.ds[Y]
+    @classmethod
+    def create(
+        cls, scale: Mesoscale, *dsets: DependentDataset, height: int = 80, width: int = 80
+    ) -> ReSampleGenerator:
+        return cls(_sample_iterator(scale, *dsets), height=height, width=width)
 
-    # @property
-    # def x(self) -> xr.DataArray:
-    #     return self.ds[X]
+    def _generate(
+        self,
+        __func: Callable[[Definition, xr.Dataset, Definition], NDArray],
+        partial: functools.partial[pyresample.geometry.AreaDefinition],
+        time: Slice[np.datetime64],
+    ) -> Array[[N, N, N, N, N], np.float_]:
+        # - resample the data
+        arr = np.stack(
+            [
+                __func(ds.grid_definition, ds.sel({TIME: time}), partial(area_extent=area_extent))
+                for ds, area_extent in self._it
+            ],
+        )
+        # - reshape the data
+        t = (time.stop - time.start) // np.timedelta64(1, "h") + 1
+        z, y, x = arr.shape[:3]
+        arr = arr.reshape((z, y, x, t, -1))  # unsqueeze C
+        return np.moveaxis(arr, (-1, -2), (0, 1))
 
-    # # - coords
-    # @property
-    # def time(self) -> xr.DataArray:
-    #     return self.ds[TIME]
+    def nearest(
+        self,
+        longitude: float,
+        latitude: float,
+        *,
+        time: Slice[np.datetime64],
+    ) -> Array[[N, N, N, N, N], np.float_]:
+        partial = functools.partial(
+            pyresample.geometry.AreaDefinition,
+            "",
+            "",
+            "",
+            width=self.width,
+            height=self.height,
+            projection=pyproj.CRS(
+                {
+                    "proj": "laea",
+                    "lat_0": latitude,
+                    "lon_0": longitude,
+                    "x_0": 0,
+                    "y_0": 0,
+                    "ellps": "WGS84",
+                    "units": "m",
+                    "no_defs": None,
+                    "type": "crs",
+                }
+            ),
+        )
+        return self._generate(self._resample_nearest, partial, time)
 
-    # @property
-    # def level(self) -> xr.DataArray:
-    #     return self.ds[LVL]
-
-    # if level in self.level:
-
-    # def get_area_definition(self) -> pyresample.geometry.AreaDefinition:
-    #     raise NotImplementedError()
-    #     crs = self.metadata.crs
-    #     area_def = pyresample.geometry.AreaDefinition(
-    #         "area_def",
-    #         "area_def",
-    #         "area_def",
-    #         projection=crs,
-    #         width=self.x.size,
-    #         height=self.y.size,
-    #     )
-    #     return area_def
-
-    # def ge_T_coordinates(self: IndependentDataset) -> tuple[Array[[N, N], np.float_], Array[[N, N], np.float_]]:
-    #     lons = self.lons.to_numpy()
-    #     lats = self.lats.to_numpy()
-    #     lons = (lons + 180.0) % 360 - 180.0
-    #     return lons, lats
-
-    # def get_grid_definition(self: IndependentDataset) -> pyresample.geometry.GridDefinition:
-    #     lons, lats = self.ge_T_coordinates()
-
-    #     return pyresample.geometry.GridDefinition(lons, lats)
+    def _resample_nearest(
+        self,
+        source: pyresample.geometry.BaseDefinition,
+        ds: xr.Dataset,
+        target: pyresample.geometry.BaseDefinition,
+    ) -> NDArray[np.float_]:
+        return pyresample.kd_tree.resample_nearest(
+            source,
+            data=ds.transpose(Y, X, ...).to_array("V").stack({"C": ["V", T, Z]}).to_numpy(),
+            target_geo_def=target,
+            radius_of_influence=500000,
+        )

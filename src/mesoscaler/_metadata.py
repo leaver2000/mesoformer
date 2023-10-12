@@ -7,6 +7,7 @@ import enum
 import types
 from typing import MutableMapping, NamedTuple, TypeAlias
 
+import numpy as np
 import pandas as pd
 import pyproj
 
@@ -22,7 +23,7 @@ from .typing import (
     TypeAlias,
     TypeVar,
 )
-from .utils import get_pandas_dtype, is_scalar, join_kv
+from .utils import is_scalar, join_kv
 
 LOC = "__mesometa_loc__"
 CLASS_METADATA = "__mesometa_cls_data__"
@@ -30,6 +31,7 @@ MEMBER_METADATA = "__mesometa_member_data__"
 MEMBER_ALIASES = "__mesometa_member_aliases__"
 MEMBER_SERIES = "__mesometa_series__"
 
+_Item: TypeAlias = np.generic | bool | int | float | complex | str | bytes | memoryview | enum.Enum | Hashable
 _ENUM_DICT_RESERVED_KEYS = (
     "__doc__",
     "__module__",
@@ -64,7 +66,7 @@ def auto_field(value: _T | Any = None, *, aliases: list[_T] | None = None, **met
 
 
 def get_metadata() -> list[dict[str, Any]]:
-    metadata = getattr(_EnumMetaCls.__metadata__, "_data")  # type: Mapping[str, types.MappingProxyType[str, Any]]
+    metadata = getattr(_EnumMetaCls.__metadata__, "_data")  # type: Mapping[int, types.MappingProxyType[str, Any]]
     items = ((key, dict(value)) for key, value in metadata.items())
     return [
         {
@@ -101,19 +103,19 @@ def _unpack_info(old: enum._EnumDict) -> tuple[enum._EnumDict, dict[str, Any]]:
 
 def _repack_info(
     name: str,
-    member_map: Mapping[str, enum.Enum],
+    member_map: dict[str, enum.Enum],
     metadata: dict[str, dict[str, Any]],
     class_metadata: dict[str, Any],
-    dtype: Any,
 ) -> types.MappingProxyType[str, Any]:
+    index = pd.Index(list(member_map.keys()), name="member_names", dtype="string[pyarrow]")  # type: pd.Index[str]
     aliases = pd.DataFrame.from_dict(
-        {k: list(set(metadata[k].pop(MEMBER_ALIASES, []))) for k in member_map.keys()}, orient="index"
+        {name: list(set(metadata[name].pop(MEMBER_ALIASES, []))) for name in index}, orient="index"
     ).T
 
     member_metadata = types.MappingProxyType(collections.defaultdict(dict, metadata))
     member_series = pd.Series(
         list(member_map.values()),
-        index=pd.Index(list(member_map.keys()), name="member_names", dtype="string"),
+        index=index,
         dtype=pd.CategoricalDtype(),
         name=name,
     )
@@ -154,11 +156,11 @@ class _MetaDataDescriptor:
 class _EnumMetaCls(enum.EnumMeta):
     __metadata__ = _MetaDataDescriptor()
 
-    def __new__(cls, name: str, bases: tuple[Any, ...], cls_dict: enum._EnumDict, **kwargs: Any):
+    def __new__(cls, name: str, bases: tuple[Any, ...], cls_dict: enum._EnumDict, **kwargs: Any) -> _EnumMetaCls:
         cls_dict, member_metadata = _unpack_info(cls_dict)
         obj = super().__new__(cls, name, bases, cls_dict)
         if obj._member_names_:
-            obj.__metadata__ = _repack_info(name, obj._member_map_, member_metadata, kwargs, get_pandas_dtype(obj))
+            obj.__metadata__ = _repack_info(name, obj._member_map_, member_metadata, kwargs)
 
         return obj
 
@@ -175,7 +177,7 @@ class _EnumMetaCls(enum.EnumMeta):
         return cls.__metadata__[LOC]
 
     @property
-    def _series(cls) -> pd.Series:
+    def _series(cls) -> pd.Series[Any]:
         return cls.__metadata__[MEMBER_SERIES]
 
     @property
@@ -200,38 +202,38 @@ class _EnumMetaCls(enum.EnumMeta):
         return pd.Series(cls._member_map_, name=cls.__name__)
 
     # =================================================================================================================
-    def __call__(cls, __items: Iterable[Hashable] | Hashable) -> Any | list[Any]:  # type: ignore[override]
+    def __call__(cls, item: Iterable[_Item] | _Item) -> Any | list[Any]:  # type: ignore[override]
         """It is possible to return multiple members if the members share an alias."""
-        if is_scalar(__items):
-            return cls._get_from_hashable(__items)  # type: ignore
-        return cls.loc[cls.is_in(__items)]  # type: ignore
+        if is_scalar(item):
+            return cls._scalar_lookup(item)
+        return cls.loc[cls.is_in(item)]  # type: ignore
 
-    def _get_from_hashable(cls, __item: Hashable, /) -> Any:
+    def _scalar_lookup(cls, item: _Item, /) -> Any:
         s = cls._series
-        if isinstance(__item, str) and (member := s.get(__item, None)):
+        if isinstance(item, str) and (member := s.get(item, None)):
             return member
-        elif (mask := s == __item).any():
+        elif (mask := s == item).any():
             return s[mask].item()
 
-        return s[cls.is_in(__item)].item()
+        return s[cls.is_in(item)].item()
 
     def to_list(cls, /) -> list[Any]:
         return cls._series.to_list()
 
-    def is_in(cls, __x: Hashable | Iterable[Hashable], /) -> pd.Series[bool]:
-        # if the child enum is a tuple we dont want to iter __x
-        __x = list([__x] if type(__x) in cls.mro() or isinstance(__x, Hashable) else __x)  # type:ignore
+    def is_in(cls, item: _Item | Iterable[_Item], /) -> pd.Series[bool]:
+        # if the child enum is a tuple we dont want to iter item
+        item = list([item] if type(item) in cls.mro() or isinstance(item, Hashable) else item)  # type:ignore
 
-        return cls._series.isin(__x) | cls._names.isin(__x) | cls._aliases.isin(__x).any(axis=0, skipna=True)
+        return cls._series.isin(item) | cls._names.isin(item) | cls._aliases.isin(item).any(axis=0, skipna=True)
 
-    def difference(cls, __x: Hashable | Iterable[Hashable], /) -> set[Any]:
-        return set(cls).difference(cls(__x))
+    def difference(cls, item: _Item | Iterable[_Item], /) -> set[Any]:
+        return set(cls).difference(cls(item))
 
-    def intersection(cls, __x: Hashable | Iterable[Hashable], /) -> set[Any]:
-        return set(cls).intersection(cls(__x))
+    def intersection(cls, item: _Item | Iterable[_Item], /) -> set[Any]:
+        return set(cls).intersection(cls(item))
 
-    def remap(cls, __x: Iterable[HashableT], /):
-        return {x: cls.__call__(x) for x in __x}
+    def remap(cls, item: Iterable[HashableT], /):
+        return {x: cls(x) for x in item}
 
 
 class TableEnum(enum.Enum, metaclass=_EnumMetaCls):
@@ -296,7 +298,7 @@ def get_crs(name: str) -> pyproj.CRS:
 
 
 class DependentVariables(IndependentVariables):
-    @classmethod  # type:ignore
+    @classmethod  # type: ignore
     @property
     def crs(cls) -> pyproj.CRS:
         md = cls.metadata  # type: MutableMapping[str, Any] # type: ignore

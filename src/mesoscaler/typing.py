@@ -144,6 +144,27 @@ DatetimeLikeScalar: TypeAlias = Union["pd.Period", "pd.Timestamp", "pd.Timedelta
 PandasScalar: TypeAlias = Union["pd.Period", "pd.Timestamp", "pd.Timedelta", "pd.Interval"]
 Scalar: TypeAlias = Union[PythonScalar, PandasScalar, np.datetime64, np.timedelta64, datetime.date]
 MaskType: TypeAlias = Union["pd.Series[bool]", "NDArray[np.bool_]", list[bool]]
+# from typing import Iterator, Protocol
+# import datetime
+
+# _T1 = TypeVar("_T1", covariant=True)
+
+
+class _Slice(Protocol[_T_co]):
+    @property
+    def start(self) -> _T_co:
+        ...
+
+    @property
+    def stop(self) -> _T_co:
+        ...
+
+    @property
+    def step(self) -> _T_co:
+        ...
+
+
+Slice: TypeAlias = _Slice[_T_co] | slice
 
 
 # =====================================================================================================================
