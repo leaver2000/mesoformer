@@ -161,7 +161,7 @@ def log_scale(x: NDArray[np.number], rate: float = 1.0) -> NDArray[np.float_]:
     return normalized_scale(np.log(x), rate=rate)
 
 
-def sort_unique(x: ListLike[T]) -> NDArray[T]:
+def sort_unique(x: ListLike[T], descending=False) -> NDArray[T]:
     """
     Sorts the elements of the input array `x` in ascending order and removes any duplicates.
 
@@ -180,7 +180,10 @@ def sort_unique(x: ListLike[T]) -> NDArray[T]:
     >>> sort_unique([3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5])
     array([1, 2, 3, 4, 5, 6, 9])
     """
-    return np.sort(np.unique(np.asanyarray(x)))
+    a = np.sort(np.unique(np.asanyarray(x)))
+    if descending:
+        a = a[::-1]
+    return a
 
 
 def square_space(in_size: int, out_size: int) -> tuple[Pair[Array[[N], Any]], Pair[Array[[N, N], Any]]]:

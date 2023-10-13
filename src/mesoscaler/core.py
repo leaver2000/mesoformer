@@ -24,17 +24,18 @@ from .enums import (
     Z,
 )
 from .generic import Data
-from .typing import (
+from .typing import (  # type:ignore
+    Final,
     N2,
     N4,
     Any,
     Array,
     Callable,
     Hashable,
-    Iterable,
-    Iterator,  # type:ignore
-    ListLike,
-    Literal,  # type:ignore
+    Iterable,  # type:ignore
+    Iterator,
+    ListLike,  # type:ignore
+    Literal,
     Mapping,
     N,
     NDArray,
@@ -43,7 +44,7 @@ from .typing import (
     Slice,
     TypeAlias,
     Sequence,  # noqa
-)
+)  # type:ignore
 from .utils import log_scale, sort_unique
 
 AreaExtent: TypeAlias = Array[[N4], np.float_]  # type:ignore
@@ -52,17 +53,18 @@ Depends: TypeAlias = "type[DependentVariables] | DependentVariables | Sequence[D
 ResampleInstruction: TypeAlias = "tuple[DependentDataset, AreaExtent]"
 Unit = Literal["km", "m"]
 # =====================================================================================================================
-P0 = 1013.25  # - mbar
-P1 = 25.0  # - mbar
-ERA5_GRID_RESOLUTION = 30.0  # km / px
-# RATE = ERA5_GRID_RESOLUTION / 2
-URMA_GRID_RESOLUTION = 2.5  # km / px
-MESOSCALE_BETA = 200.0  # km
+STANDARD_SURFACE_PRESSURE = P0 = 1013.25  # - mbar
+DERIVED_SURFACE_COORDINATE = {LVL: (LVL.axis, [STANDARD_SURFACE_PRESSURE])}
 DEFAULT_PRESSURE: ListLike[Number] = [P0, 925.0, 850.0, 700.0, 500.0, 300.0]
-DERIVED_SFC_COORDINATE = {LVL: (LVL.axis, [P0])}
+MESOSCALE_BETA = 200.0  # km
+
+P1 = 25.0  # - mbar
+# ERA5_GRID_RESOLUTION = 30.0  # km / px
+# RATE = ERA5_GRID_RESOLUTION / 2
+# URMA_GRID_RESOLUTION = 2.5  # km / px
+# CHANNELS = "channels"
+# VARIABLES = "variable"
 _units: Mapping[Unit, float] = {"km": 1.0, "m": 1000.0}
-CHANNELS = "channels"
-VARIABLES = "variable"
 _GRID_DEFINITION = "grid_definition"
 _DEPENDS = "depends"
 
@@ -150,7 +152,7 @@ def make_independent(ds: xr.Dataset) -> xr.Dataset:  # type:ignore
     if missing_coords := Coordinates.difference(ds.coords):
         if missing_coords != {LVL}:
             raise ValueError(f"missing coordinates {missing_coords}; only {LVL} is allowed to be missing!")
-        ds = ds.assign_coords(DERIVED_SFC_COORDINATE).set_xindex(LVL)
+        ds = ds.assign_coords(DERIVED_SURFACE_COORDINATE).set_xindex(LVL)
 
     if ds[LAT].dims == (Y,) and ds[LON].dims == (X,):
         # 5.2. Two-Dimensional Latitude, Longitude, Coordinate
@@ -170,7 +172,7 @@ def make_independent(ds: xr.Dataset) -> xr.Dataset:  # type:ignore
 
 
 # =====================================================================================================================
-#
+# - the dataset
 # =====================================================================================================================
 class IndependentDataset(xr.Dataset):
     __slots__ = ()
@@ -260,10 +262,8 @@ class DependentDataset(IndependentDataset):
 
 
 # =====================================================================================================================
-# Resampling
+# - Resampling
 # =====================================================================================================================
-
-
 def _instruction_iterator(scale: Mesoscale, *dsets: DependentDataset) -> Iterator[ResampleInstruction]:
     levels = np.concatenate([ds.level for ds in dsets])
     levels = np.sort(levels[np.isin(levels, scale.hpa)])[::-1]
@@ -283,17 +283,16 @@ class Mesoscale(Data[NDArray[np.float_]]):
         troposphere: ListLike[Number] | None = None,
     ) -> None:
         super().__init__()
-        tropo = self._sort_unique_descending(troposphere if troposphere is not None else self._arange())
-        self._hpa = hpa = self._sort_unique_descending(pressure)
+        # descending pressure
+        tropo = sort_unique(self._arange() if troposphere is None else troposphere, descending=True).astype(np.float_)
+        self._hpa = hpa = sort_unique(pressure, descending=True).astype(np.float_)
         if not all(np.isin(hpa, tropo)):
             raise ValueError(f"pressure {hpa} must be a subset of troposphere {tropo}")
-        mask = np.isin(tropo, hpa)
-        self._scale = scale = log_scale(tropo, rate=rate)[::-1][mask]  # ascending scale
-        self._dx, self._dy = scale[np.newaxis] * np.array([[dx], [dy or dx]])  # ascending extent km scale
 
-    @staticmethod
-    def _sort_unique_descending(x: ListLike[Number]) -> NDArray[np.float_]:
-        return sort_unique(x)[::-1].astype(np.float_)
+        # ascending scale
+        mask = np.isin(tropo, hpa)
+        self._scale = scale = log_scale(tropo, rate=rate)[::-1][mask]
+        self._dx, self._dy = scale[np.newaxis] * np.array([[dx], [dy or dx]])
 
     @staticmethod
     def _arange(
@@ -355,8 +354,8 @@ class Mesoscale(Data[NDArray[np.float_]]):
         xy = self.to_numpy(units=units)
         return np.c_[-xy, xy]
 
-    def resample(self, *dsets: DependentDataset, height: int = 80, width: int = 80) -> ReSampleGenerator:
-        return ReSampleGenerator(_instruction_iterator(self, *dsets), height=height, width=width)
+    def resample(self, *dsets: DependentDataset, height: int = 80, width: int = 80) -> ReSampler:
+        return ReSampler(_instruction_iterator(self, *dsets), height=height, width=width)
 
 
 _laea = {
@@ -374,7 +373,59 @@ def lambert_equal_area(longitude: float, latitude: float) -> pyproj.CRS:
     return pyproj.CRS(_laea | {"lat_0": latitude, "lon_0": longitude})
 
 
-class ReSampleGenerator:
+def lambert_conformal_conic(longitude: float, latitude: float) -> pyproj.CRS:
+    return pyproj.CRS(
+        {
+            "proj": "lcc",
+            "lat_1": 30,
+            "lat_2": 60,
+            "lat_0": latitude,
+            "lon_0": longitude,
+            "x_0": 0,
+            "y_0": 0,
+            "ellps": "WGS84",
+            "units": "m",
+            "no_defs": None,
+            "type": "crs",
+        }
+    )
+
+
+_projection_map: Final[Mapping[str, Callable[[float, float], pyproj.CRS]]] = {
+    "lambert_azimuthal_equal_area": lambert_equal_area,
+    "lambert_conformal_conic": lambert_conformal_conic,
+}
+
+
+def area_definition(
+    width: float,
+    height: float,
+    projection: pyproj.CRS,
+    area_extent: AreaExtent,
+    lons: NDArray[np.float_] | None = None,
+    lats: NDArray[np.float_] | None = None,
+    dtype: Any = np.float_,
+    area_id: str = "undefined",
+    description: str = "undefined",
+    proj_id: str = "undefined",
+    nprocs: int = 1,
+) -> pyresample.geometry.AreaDefinition:
+    return pyresample.geometry.AreaDefinition(
+        area_id,
+        description,
+        proj_id,
+        width=width,
+        height=height,
+        projection=projection,
+        area_extent=area_extent,
+        lons=lons,
+        lats=lats,
+        dtype=dtype,
+        nprocs=nprocs,
+    )
+
+
+class ReSampler:
     def __init__(
         self,
         it: Iterator[ResampleInstruction],
@@ -382,20 +433,22 @@ class ReSampleGenerator:
         *,
         height: int = 80,
         width: int = 80,
+        target_projection: str = "lambert_azimuthal_equal_area",
     ) -> None:
         self._instruction = iter(it)
         self.height = height
         self.width = width
+        self.target_projection = _projection_map[target_projection]
 
     @classmethod
-    def create(
-        cls, scale: Mesoscale, *dsets: DependentDataset, height: int = 80, width: int = 80
-    ) -> ReSampleGenerator:
+    def create(cls, scale: Mesoscale, *dsets: DependentDataset, height: int = 80, width: int = 80) -> ReSampler:
         return cls(_instruction_iterator(scale, *dsets), height=height, width=width)
 
     def _generate(
         self,
-        __func: Callable[[Definition, xr.Dataset, Definition], NDArray],
+        __func: Callable[
+            [pyresample.geometry.GridDefinition, xr.Dataset, pyresample.geometry.AreaDefinition], NDArray
+        ],
         partial: functools.partial[pyresample.geometry.AreaDefinition],
         time: Slice[np.datetime64],
     ) -> Array[[N, N, N, N, N], np.float_]:
@@ -420,25 +473,19 @@ class ReSampleGenerator:
         time: Slice[np.datetime64],
     ) -> Array[[N, N, N, N, N], np.float_]:
         partial = functools.partial(
-            pyresample.geometry.AreaDefinition,
-            "",
-            "",
-            "",
+            area_definition,
             width=self.width,
             height=self.height,
-            projection=lambert_equal_area(longitude, latitude),
+            projection=self.target_projection(longitude, latitude),
         )
         return self._generate(self._resample_nearest, partial, time)
 
     def _resample_nearest(
         self,
-        source: pyresample.geometry.BaseDefinition,
+        source: pyresample.geometry.GridDefinition,
         ds: xr.Dataset,
-        target: pyresample.geometry.BaseDefinition,
+        target: pyresample.geometry.AreaDefinition,
     ) -> NDArray[np.float_]:
         return pyresample.kd_tree.resample_nearest(
-            source,
-            data=ds.transpose(Y, X, ...).to_array("V").stack({"C": ["V", T, Z]}).to_numpy(),
-            target_geo_def=target,
-            radius_of_influence=500000,
+            source, data=ds.to_stacked_array("C", [Y, X]).to_numpy(), target_geo_def=target, radius_of_influence=500000
         )
