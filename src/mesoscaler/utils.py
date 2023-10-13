@@ -5,7 +5,6 @@ __all__ = [
     "normalized_scale",
     "sort_unique",
     "arange_slice",
-    "frozen_list",
     "interp_frames",
     "square_space",
     "url_join",
@@ -23,7 +22,6 @@ import enum
 import functools
 import itertools
 import json
-import textwrap
 import types
 import urllib.parse
 from collections.abc import Sequence
@@ -31,24 +29,23 @@ from collections.abc import Sequence
 import numpy as np
 import pandas as pd
 import toml
-import torch
-from frozenlist import FrozenList
 from pandas._typing import DtypeObj
-from scipy.interpolate import RegularGridInterpolator
 
 try:
     get_ipython  # type: ignore
     import tqdm.notebook as tqdm
-except NameError:
-    import tqdm  # type: ignore
-except ImportError:
-    tqdm = None  # type: ignore
-
-from .typing import (
+except (NameError, ImportError):
+    try:
+        import tqdm  # type: ignore
+    except ImportError:
+        tqdm = None  # type: ignore
+from ._torch_compat import Tensor
+from ._typing import (
     Any,
     AnyArrayLike,
     Array,
     Callable,
+    Final,
     Hashable,
     Iterable,
     Iterator,
@@ -59,19 +56,20 @@ from .typing import (
     NDArray,
     Pair,
     Sequence,
+    Sized,
     StrPath,
-    T,
     TypeGuard,
     TypeVar,
     overload,
 )
 
+_T1 = TypeVar("_T1", bound=Any)
+_T2 = TypeVar("_T2")
+
 _NoDefault = enum.Enum("_NoDefault", "NoDefault")
 NO_DEFAULT = _NoDefault.NoDefault
 NoDefault = Literal[_NoDefault.NoDefault]
 del _NoDefault
-_T1 = TypeVar("_T1")
-_T2 = TypeVar("_T2")
 
 
 def is_ipython() -> bool:
@@ -117,7 +115,7 @@ def is_array_like(x: Any) -> TypeGuard[AnyArrayLike]:
 # =====================================================================================================================
 # - array/tensor utils
 # =====================================================================================================================
-TensorT = TypeVar("TensorT", torch.Tensor, Array[..., Any])
+TensorT = TypeVar("TensorT", Tensor, Array[..., Any])
 
 
 def normalize(x: TensorT) -> TensorT:
@@ -134,9 +132,9 @@ def normalize(x: TensorT) -> TensorT:
     Raises:
         TypeError: If the input tensor is not a numpy array or a PyTorch tensor.
     """
-    if not isinstance(x, (np.ndarray, torch.Tensor)):
+    if not isinstance(x, (np.ndarray, Tensor)):
         raise TypeError("Input tensor must be a numpy array or a PyTorch tensor.")
-    return (x - x.min()) / (x.max() - x.min())  # type: ignore
+    return (x - x.min()) / (x.max() - x.min())  # pyright: ignore
 
 
 def normalized_scale(x: TensorT, rate: float = 1.0) -> TensorT:
@@ -161,18 +159,18 @@ def log_scale(x: NDArray[np.number], rate: float = 1.0) -> NDArray[np.float_]:
     return normalized_scale(np.log(x), rate=rate)
 
 
-def sort_unique(x: ListLike[T], descending=False) -> NDArray[T]:
+def sort_unique(x: ListLike[_T1], descending=False) -> NDArray[_T1]:
     """
     Sorts the elements of the input array `x` in ascending order and removes any duplicates.
 
     Parameters
     ----------
-    x : ListLike[T]
+    x : ListLike[_T1]
         The input array to be sorted and made unique.
 
     Returns
     -------
-    NDArray[T]
+    NDArray[_T1]
         A new array containing the sorted, unique elements of `x`.
 
     Examples
@@ -210,11 +208,11 @@ def square_space(in_size: int, out_size: int) -> tuple[Pair[Array[[N], Any]], Pa
 
 
 def interp_frames(
-    arr: Array[[N, N, ...], T],
+    arr: Array[[N, N, ...], _T1],
     *,
     img_size: int = 256,
     method: str = "linear",
-) -> Array[Nd[N, N, ...], T]:  # type: ignore
+) -> Array[[N, N, ...], _T1]:
     """
     Interpolate the first two equally shaped dimensions of an array to the new `patch_size`.
     using `scipy.interpolate.RegularGridInterpolator`.
@@ -225,11 +223,13 @@ def interp_frames(
     >>> atmoformer.utils.interpatch(arr, 768).shape
     (768, 768, 49)
     """
+    from scipy.interpolate import RegularGridInterpolator
+
     x, y = arr.shape[:2]
     if x != y:  # first two dimensions must be equal
         raise ValueError(f"array must be square, but got shape: {arr.shape}")
     elif x == img_size == y:  # no interpolation needed
-        return arr  # type: ignore
+        return arr  # pyright: ignore
     points, values = square_space(x, img_size)
     interp = RegularGridInterpolator(points, arr, method=method)
     return interp(values).astype(arr.dtype)
@@ -240,45 +240,41 @@ def interp_frames(
 # =====================================================================================================================
 _array2string = functools.partial(
     np.array2string,
-    max_line_width=72,
+    max_line_width=100,
     precision=2,
     separator=" ",
     floatmode="fixed",
 )
 
 
-def indent_pair(k: str, v: Any, l_pad: int, prefix="  ") -> str:
-    if isinstance(v, np.ndarray):
-        v = _array2string(v)
-    elif isinstance(v, pd.DataFrame):
-        sep = "\n".ljust(l_pad)
-        v = sep + sep.join(v.to_string().splitlines())
-    return textwrap.indent(f"{k.rjust(l_pad)}: {v!r}", prefix=prefix)
+def _repr_generator(*args: tuple[str, Any]):
+    prefix = "- "
+    k, _ = zip(*args)
+    width = max(map(len, k))
+    for key, value in args:
+        key = f"{prefix}{key.rjust(width)}: "
+        if isinstance(value, np.ndarray):
+            value = _array2string(value, prefix=key)
+
+        else:
+            value = repr(value)
+        yield f"{key}{value}"
 
 
-def indent_kv(*args: tuple[str, Any], prefix="  ") -> list[str]:
-    l_pad = max(len(k) for k, _ in args)
-    return [indent_pair(k, v, l_pad, prefix) for k, v in args]
-
-
-def join_kv(head: tuple[Hashable, Any] | str, *args: tuple[Hashable, Any], sep="\n", prefix=" ") -> str:
+def join_kv(head: tuple[Hashable, Any] | str | type, *args: tuple[Hashable, Any], sep="\n") -> str:
     if isinstance(head, tuple):
         args = (head, *args)
         head = ""
-    args_ = tuple((str(x), y) for x, y in args)
-    shift = max(len(k) for k, _ in args_)
-    text = sep.join(f"{key.rjust(shift)}: {value!r}" for key, value in args_)
-    body = textwrap.indent(text, prefix=prefix)
-    return sep.join([head, body])
+    elif isinstance(head, type):
+        head = f"{head.__name__}:"
+
+    text = sep.join(_repr_generator(*((str(k), v) for k, v in args)))
+    return sep.join([head, text])
 
 
 # =====================================================================================================================
 # - list utils
 # =====================================================================================================================
-def frozen_list(item: Sequence[_T1]) -> list[_T1]:
-    fl = FrozenList(item)
-    fl.freeze()
-    return fl  # type: ignore
 
 
 def arange_slice(
@@ -308,6 +304,9 @@ def arange_slice(
 # =====================================================================================================================
 # - iterable utils
 # =====================================================================================================================
+max_len: Final[Callable[[Iterable[Sized]], int]] = lambda x: max(map(len, x))
+
+
 @overload
 def find(__func: Callable[[_T1], bool], __x: Iterable[_T1]) -> _T1:
     ...

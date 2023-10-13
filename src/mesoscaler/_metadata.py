@@ -1,7 +1,7 @@
 """A mix of Abstract Base Classes and Generic Data Adapters for various data structures."""
 from __future__ import annotations
 
-__all__ = ["auto_field", "TableEnum", "IndependentVariables", "DependentVariables"]
+__all__ = ["auto_field", "VariableEnum", "IndependentVariables", "DependentVariables"]
 import collections
 import enum
 import types
@@ -12,7 +12,7 @@ import pandas as pd
 import pyproj
 
 from .generic import Loc as _Loc
-from .typing import (
+from ._typing import (
     Any,
     Hashable,
     HashableT,
@@ -164,8 +164,8 @@ class _EnumMetaCls(enum.EnumMeta):
 
         return obj
 
-    def __repr__(cls):
-        return join_kv(cls.__name__, *cls._member_map_.items())
+    def __repr__(cls) -> str:
+        return join_kv(cls, *cls._member_map_.items())
 
     # =================================================================================================================
     @property
@@ -173,7 +173,7 @@ class _EnumMetaCls(enum.EnumMeta):
         return cls.__metadata__[CLASS_METADATA]
 
     @property
-    def loc(cls) -> _Loc[str | bool | slice, list["TableEnum"]]:
+    def loc(cls) -> _Loc[str | bool | slice, list["VariableEnum"]]:
         return cls.__metadata__[LOC]
 
     @property
@@ -236,7 +236,7 @@ class _EnumMetaCls(enum.EnumMeta):
         return {x: cls(x) for x in item}
 
 
-class TableEnum(enum.Enum, metaclass=_EnumMetaCls):
+class VariableEnum(enum.Enum, metaclass=_EnumMetaCls):
     @property
     def aliases(self) -> list[Any]:
         return self.__class__._aliases[self.name].dropna().to_list()
@@ -245,8 +245,11 @@ class TableEnum(enum.Enum, metaclass=_EnumMetaCls):
     def metadata(self) -> MemberMetadata:
         return self.__class__._member_metadata[self.name]
 
+    def add_aliases(self, *aliases: Any) -> None:
+        self.__class__._aliases[self.name].extend(aliases)
 
-class IndependentVariables(str, TableEnum):
+
+class IndependentVariables(str, VariableEnum):
     @staticmethod
     def _generate_next_value_(name: str, *_):
         return name

@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
 from src.mesoscaler.enums import ERA5, Dimensions, URMA, Z, X, Y, LAT, LON, LVL, TIME, T
-from src.mesoscaler._metadata import TableEnum, auto_field, CLASS_METADATA, MEMBER_METADATA, _EnumMetaCls
+from src.mesoscaler._metadata import VariableEnum, auto_field, CLASS_METADATA, MEMBER_METADATA, _EnumMetaCls
 
 
 def test_coordinate_axes() -> None:
@@ -32,12 +32,11 @@ def test_main():
     assert isinstance(Dimensions.to_frame(), pd.DataFrame)
     assert LAT.axis == (Y, X)
     assert ERA5("z") is ERA5.Z and ERA5.Z is ERA5("geopotential") and ERA5.Z == "geopotential"
-    assert ERA5(("z", "t")) == ERA5(iter("zt"))
     assert ERA5("z") == ERA5.Z
-    assert set(ERA5.difference(iter("tuv"))) == set(ERA5).difference(ERA5(iter("tuv")))
+    assert set(ERA5.difference(list("tuv"))) == set(ERA5).difference(ERA5(list("tuv")))
 
 
-class MyEnum(str, TableEnum, my_class_metadata="hello"):
+class MyEnum(str, VariableEnum, my_class_metadata="hello"):
     A = auto_field("a", aliases=["alpha"], hello="world")
     B = auto_field("b", aliases=["beta"])
     C = auto_field("c", aliases=["beta"])

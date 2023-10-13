@@ -1,10 +1,15 @@
-"""torch.utils.data compatible IterableDataset implementation."""
+# mypy: ignore-errors
+# pyright: reportGeneralTypeIssues=false
+# flake8: noqa: F821
+"""torch optional dependency"""
 
 __all__ = ["Dataset", "ConcatDataset", "IterableDataset", "ChainDataset"]
 import bisect
-import warnings
-from typing import Generic, TypeVar, Iterator, Iterable
 import contextlib
+import warnings
+from typing import Generic, Iterable, Iterator, TypeVar
+
+from numpy import ndarray as Tensor
 
 T_co = TypeVar("T_co", covariant=True)
 T = TypeVar("T")
@@ -230,4 +235,5 @@ class ChainDataset(IterableDataset):
 
 
 with contextlib.suppress(ImportError):
-    from torch.utils.data import Dataset, IterableDataset, ConcatDataset, ChainDataset  # type: ignore[no-redef]
+    from torch import Tensor as Tensor
+    from torch.utils.data import ChainDataset, ConcatDataset, Dataset, IterableDataset

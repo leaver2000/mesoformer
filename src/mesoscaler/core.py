@@ -24,17 +24,20 @@ from .enums import (
     Z,
 )
 from .generic import Data
-from .typing import (  # type:ignore
-    Final,
+
+
+from ._typing import (
     N2,
     N4,
+    Iterable,
+    ListLike,
+    Sequence,
     Any,
     Array,
     Callable,
+    Final,
     Hashable,
-    Iterable,  # type:ignore
     Iterator,
-    ListLike,  # type:ignore
     Literal,
     Mapping,
     N,
@@ -43,13 +46,13 @@ from .typing import (  # type:ignore
     Self,
     Slice,
     TypeAlias,
-    Sequence,  # noqa
-)  # type:ignore
+    Union,
+)
 from .utils import log_scale, sort_unique
 
-AreaExtent: TypeAlias = Array[[N4], np.float_]  # type:ignore
+AreaExtent: TypeAlias = Array[[N4], np.float_]
 Definition: TypeAlias = pyresample.geometry.BaseDefinition
-Depends: TypeAlias = "type[DependentVariables] | DependentVariables | Sequence[DependentVariables] | Dependencies"
+Depends: TypeAlias = Union[type[DependentVariables], DependentVariables, Sequence[DependentVariables], "Dependencies"]
 ResampleInstruction: TypeAlias = "tuple[DependentDataset, AreaExtent]"
 Unit = Literal["km", "m"]
 # =====================================================================================================================
@@ -80,7 +83,7 @@ class Dependencies:
         elif isinstance(depends, type):
             assert issubclass(depends, DependentVariables)
             enum = depends
-            depends = list(depends)  # type: ignore
+            depends = list(depends)
         elif isinstance(depends, DependentVariables):
             enum = depends.__class__
             depends = [depends]
@@ -131,7 +134,7 @@ def is_independent(ds: xr.Dataset) -> bool:
     return is_coordinate_independent(ds.coords) and is_dimension_independent(ds.dims)
 
 
-def make_independent(ds: xr.Dataset) -> xr.Dataset:  # type:ignore
+def make_independent(ds: xr.Dataset) -> xr.Dataset:
     """insures a dependant dataset is in the correct format."""
     if is_independent(ds):
         return ds

@@ -5,10 +5,10 @@ import abc
 import queue
 import random
 import threading
+from typing import Any, Callable, Generic, Iterable, TypeVar
 
-from ._torch_data import IterableDataset  # type: ignore
-
-from .typing import (
+from ._torch_compat import IterableDataset
+from ._typing import (
     Any,
     AnyArrayLike,
     Callable,
@@ -20,76 +20,66 @@ from .typing import (
     Iterable,
     Iterator,
     Mapping,
+    NumpyDType_T,
+    PandasDType_T,
     Self,
-    T,
     TypeVar,
-    _T_co,
     overload,
+    ListLike,
 )
 from .utils import is_array_like, join_kv
 
-K = TypeVar("K")
-R = TypeVar("R")
-ListIndex = list[int] | list[bool] | list[str]
+_T = TypeVar("_T")
 
 
-class Loc(Generic[K, R]):
-    """
-    ```
-    s = pd.Series({"a": 1, "b": 2, "c": 3})  # type: pd.Series[int]
-    loc = Loc(functools.partial(np.asarray, dtype=np.float_), s)  # type: Loc[float, NDArray[np.float_]]
-    a = loc["a"]  # type: int
-    bc = loc[["b", "c"]]  # type: NDArray[np.float_]
-    arr = np.array([1, 2, 3]).astype(np.float_)  # type: NDArray[np.float_]
-    list_loc = Loc(list, arr)  # type: Loc[np.float_, list[np.float_]]
-    z = list_loc[0]  # type: np.float_
-    assert isinstance(z, np.floating)
-    x = list_loc[:]  # type: list[np.float_]
-    ```
-    """
+_AnyArrayLikeT = TypeVar("_AnyArrayLikeT", bound=AnyArrayLike)
 
-    def __init__(self, hook: Callable[[AnyArrayLike[_T_co]], R], x: AnyArrayLike[_T_co]) -> None:
-        self._data = x
+
+class Loc(Generic[_AnyArrayLikeT]):
+    def __init__(
+        self,
+        hook: Callable[[AnyArrayLike[NumpyDType_T, PandasDType_T]], _AnyArrayLikeT],
+        data: AnyArrayLike[NumpyDType_T, PandasDType_T],
+    ) -> None:
         self._hook = hook
+        self._data = data
 
     @overload
-    def __getitem__(self, item: K) -> _T_co:
+    def __getitem__(self, item: list) -> PandasDType_T | NumpyDType_T:
         ...
 
     @overload
-    def __getitem__(self, item: list[K | bool | Any]) -> R:
+    def __getitem__(self, item: Any) -> _AnyArrayLikeT:
         ...
 
-    def __getitem__(self, item: list[K | bool | Any]) -> _T_co | R:
-        x = self._data[item]  # type: ignore
-        if is_array_like(x):
-            return self._hook(x)
-        return x  # type: ignore
+    def __getitem__(self, item: Any) -> _AnyArrayLikeT | PandasDType_T | NumpyDType_T:  # type: ignore
+        x = self._data[item]
+        return self._hook(x) if is_array_like(x) else x
 
 
-class Data(Generic[T], abc.ABC):
+class Data(Generic[_T], abc.ABC):
     @property
     @abc.abstractmethod
-    def data(self) -> Iterable[tuple[Hashable, T]]:
+    def data(self) -> Iterable[tuple[Hashable, _T]]:
         ...
 
-    def to_dict(self) -> dict[Hashable, T]:
+    def to_dict(self) -> dict[Hashable, _T]:
         return dict(self.data)
 
     def __repr__(self) -> str:
-        return join_kv(self.__class__.__name__, *self.data)
+        return join_kv(self.__class__, *self.data)
 
 
-class DataMapping(Mapping[HashableT, T], Data[T]):
-    def __init__(self, data: Mapping[HashableT, T]) -> None:
+class DataMapping(Mapping[HashableT, _T], Data[_T]):
+    def __init__(self, data: Mapping[HashableT, _T]) -> None:
         super().__init__()
-        self._data: Final[Mapping[HashableT, T]] = data
+        self._data: Final[Mapping[HashableT, _T]] = data
 
     @property
-    def data(self) -> Iterable[tuple[HashableT, T]]:
-        yield from self.items()  # type: ignore
+    def data(self) -> Iterable[tuple[HashableT, _T]]:
+        yield from self.items()
 
-    def __getitem__(self, key: HashableT) -> T:
+    def __getitem__(self, key: HashableT) -> _T:
         return self._data[key]
 
     def __iter__(self) -> Iterator[HashableT]:
@@ -99,7 +89,7 @@ class DataMapping(Mapping[HashableT, T], Data[T]):
         return len(self._data)
 
 
-class DataWorker(Mapping[HashableT, T], Data[T]):
+class DataWorker(Mapping[HashableT, _T], Data[_T]):
     __slots__ = ("_indices", "config")
 
     def __init__(self, *, indices: Iterable[HashableT], **config: Any) -> None:
@@ -136,7 +126,7 @@ class DataWorker(Mapping[HashableT, T], Data[T]):
         return self
 
     @abc.abstractmethod
-    def __getitem__(self, key: HashableT) -> T:
+    def __getitem__(self, key: HashableT) -> _T:
         ...
 
     @abc.abstractmethod
@@ -144,17 +134,17 @@ class DataWorker(Mapping[HashableT, T], Data[T]):
         ...
 
 
-class ABCDataConsumer(Generic[HashableT, T], IterableDataset[T]):
+class ABCDataConsumer(Generic[HashableT, _T], IterableDataset[_T]):
     @property
     def name(self) -> str:
         return self.__class__.__name__
 
-    def __init__(self, worker: DataWorker[HashableT, T], *, maxsize: int = 0, timeout: float | None = None) -> None:
+    def __init__(self, worker: DataWorker[HashableT, _T], *, maxsize: int = 0, timeout: float | None = None) -> None:
         super().__init__()
-        self.thread: Final = threading.Thread(target=self._target, name=self.name, daemon=True)
-        self.queue: Final = queue.Queue[T](maxsize=maxsize)
-        self.worker: Final = worker
-        self.timeout: Final = timeout
+        self.thread = threading.Thread(target=self._target, name=self.name, daemon=True)
+        self.queue = queue.Queue[_T](maxsize=maxsize)
+        self.worker = worker
+        self.timeout = timeout
 
     def _target(self) -> None:
         for index in self.worker.keys():
@@ -163,7 +153,7 @@ class ABCDataConsumer(Generic[HashableT, T], IterableDataset[T]):
     def __len__(self) -> int:
         return len(self.worker)
 
-    def __iter__(self) -> Iterator[T]:
+    def __iter__(self) -> Iterator[_T]:
         if not self.thread.is_alive():
             self.start()
         # range is the safest option here, because the queue size may change

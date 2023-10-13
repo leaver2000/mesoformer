@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import pyproj
 
-from .typing import (
+from ._typing import (
     Any,
     ClassVar,
     Generic,
@@ -33,8 +33,6 @@ class _EnumMetaCls(Generic[_T], enum.EnumMeta):
     @property
     def metadata(self) -> MutableMapping[str, Any]: ...
     @property
-    def aliases(self) -> list[Any]: ...
-    @property
     def _series(self) -> pd.Series[enum.Enum]: ...  # type: ignore
     @property
     def _names(self) -> pd.Index[str]: ...
@@ -49,13 +47,15 @@ class _Loc(Generic[_T]):
     @overload
     def __getitem__(self, item: list[str] | list[bool]) -> list[_T]: ...
 
-class TableEnum(enum.Enum, metaclass=_EnumMetaCls):
+class VariableEnum(enum.Enum, metaclass=_EnumMetaCls):
     @property  # type: ignore
     @classmethod
     def loc(cls) -> _Loc[Self]: ...
     @property
     def metadata(self) -> MutableMapping[str, Any]: ...
-    @overload  # type: ignore
+    @property
+    def aliases(self) -> list[Any]: ...
+    @overload
     @classmethod
     def __call__(cls, item: Hashable, /) -> Self: ...
     @overload
@@ -78,7 +78,7 @@ class TableEnum(enum.Enum, metaclass=_EnumMetaCls):
     @classmethod
     def to_list(cls) -> list[Self]: ...
 
-class IndependentVariables(str, TableEnum): ...
+class IndependentVariables(str, VariableEnum): ...
 
 class _CRSMixin:
     @classmethod  # type: ignore
