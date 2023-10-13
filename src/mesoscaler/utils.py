@@ -5,7 +5,6 @@ __all__ = [
     "normalized_scale",
     "sort_unique",
     "arange_slice",
-    "frozen_list",
     "interp_frames",
     "square_space",
     "url_join",
@@ -17,55 +16,108 @@ __all__ = [
     "load_toml",
     "tqdm",
 ]
+import collections
+import datetime
+import enum
 import functools
 import itertools
 import json
-import textwrap
 import types
 import urllib.parse
 from collections.abc import Sequence
 
 import numpy as np
+import pandas as pd
 import toml
-import torch
-from frozenlist import FrozenList
-from scipy.interpolate import RegularGridInterpolator
+from pandas._typing import DtypeObj
 
 try:
     get_ipython  # type: ignore
     import tqdm.notebook as tqdm
-except NameError:
-    import tqdm
-
-from .typing import (
+except (NameError, ImportError):
+    try:
+        import tqdm  # type: ignore
+    except ImportError:
+        tqdm = None  # type: ignore
+from ._torch_compat import Tensor
+from ._typing import (
     Any,
+    AnyArrayLike,
     Array,
     Callable,
+    Final,
+    Hashable,
     Iterable,
     Iterator,
     ListLike,
+    Literal,
     Mapping,
     N,
     NDArray,
     Pair,
     Sequence,
+    Sized,
     StrPath,
-    T,
+    TypeGuard,
     TypeVar,
+    overload,
 )
 
-_T1 = TypeVar("_T1")
+_T1 = TypeVar("_T1", bound=Any)
 _T2 = TypeVar("_T2")
 
-T_co = TypeVar("T_co", covariant=True)
-T_contra = TypeVar("T_contra", contravariant=True)
+_NoDefault = enum.Enum("_NoDefault", "NoDefault")
+NO_DEFAULT = _NoDefault.NoDefault
+NoDefault = Literal[_NoDefault.NoDefault]
+del _NoDefault
 
-TensorT = TypeVar("TensorT", torch.Tensor, Array[..., Any])
+
+def is_ipython() -> bool:
+    try:
+        get_ipython  # type: ignore
+        return True
+    except NameError:
+        return False
+
+
+def has_attrs(x: Any, *attrs: str) -> bool:
+    return all(hasattr(x, attr) for attr in attrs)
+
+
+def is_sequence(x: Any) -> TypeGuard[Sequence]:
+    return not isinstance(x, (str, bytes)) and has_attrs(x, "__len__", "__iter__")
+
+
+def is_function(x: Any) -> TypeGuard[function]:
+    return isinstance(x, types.FunctionType)
+
+
+def is_enumtype(x: Any) -> TypeGuard[type[enum.Enum]]:
+    return isinstance(x, type) and issubclass(x, enum.Enum)
+
+
+def is_exception(x: Any) -> TypeGuard[type[Exception]]:
+    return isinstance(x, type) and issubclass(x, BaseException)
+
+
+def is_hashable(x: Any) -> TypeGuard[Hashable]:
+    return isinstance(x, Hashable)
+
+
+def is_scalar(x: Any) -> TypeGuard[np.generic | bool | int | float | complex | str | bytes | memoryview | enum.Enum]:
+    return np.isscalar(x) or isinstance(x, enum.Enum)
+
+
+def is_array_like(x: Any) -> TypeGuard[AnyArrayLike]:
+    return hasattr(x, "ndim") and not is_scalar(x)
 
 
 # =====================================================================================================================
 # - array/tensor utils
 # =====================================================================================================================
+TensorT = TypeVar("TensorT", Tensor, Array[..., Any])
+
+
 def normalize(x: TensorT) -> TensorT:
     """
     Normalize the input tensor along the specified dimensions.
@@ -80,9 +132,9 @@ def normalize(x: TensorT) -> TensorT:
     Raises:
         TypeError: If the input tensor is not a numpy array or a PyTorch tensor.
     """
-    if not isinstance(x, (np.ndarray, torch.Tensor)):
+    if not isinstance(x, (np.ndarray, Tensor)):
         raise TypeError("Input tensor must be a numpy array or a PyTorch tensor.")
-    return (x - x.min()) / (x.max() - x.min())  # type: ignore
+    return (x - x.min()) / (x.max() - x.min())  # pyright: ignore
 
 
 def normalized_scale(x: TensorT, rate: float = 1.0) -> TensorT:
@@ -107,18 +159,18 @@ def log_scale(x: NDArray[np.number], rate: float = 1.0) -> NDArray[np.float_]:
     return normalized_scale(np.log(x), rate=rate)
 
 
-def sort_unique(x: ListLike[T]) -> NDArray[T]:
+def sort_unique(x: ListLike[_T1], descending=False) -> NDArray[_T1]:
     """
     Sorts the elements of the input array `x` in ascending order and removes any duplicates.
 
     Parameters
     ----------
-    x : ListLike[T]
+    x : ListLike[_T1]
         The input array to be sorted and made unique.
 
     Returns
     -------
-    NDArray[T]
+    NDArray[_T1]
         A new array containing the sorted, unique elements of `x`.
 
     Examples
@@ -126,7 +178,10 @@ def sort_unique(x: ListLike[T]) -> NDArray[T]:
     >>> sort_unique([3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5])
     array([1, 2, 3, 4, 5, 6, 9])
     """
-    return np.sort(np.unique(np.asanyarray(x)))
+    a = np.sort(np.unique(np.asanyarray(x)))
+    if descending:
+        a = a[::-1]
+    return a
 
 
 def square_space(in_size: int, out_size: int) -> tuple[Pair[Array[[N], Any]], Pair[Array[[N, N], Any]]]:
@@ -153,11 +208,11 @@ def square_space(in_size: int, out_size: int) -> tuple[Pair[Array[[N], Any]], Pa
 
 
 def interp_frames(
-    arr: Array[[N, N, ...], T],
+    arr: Array[[N, N, ...], _T1],
     *,
     img_size: int = 256,
     method: str = "linear",
-) -> Array[Nd[N, N, ...], T]:  # type: ignore
+) -> Array[[N, N, ...], _T1]:
     """
     Interpolate the first two equally shaped dimensions of an array to the new `patch_size`.
     using `scipy.interpolate.RegularGridInterpolator`.
@@ -168,63 +223,58 @@ def interp_frames(
     >>> atmoformer.utils.interpatch(arr, 768).shape
     (768, 768, 49)
     """
+    from scipy.interpolate import RegularGridInterpolator
+
     x, y = arr.shape[:2]
     if x != y:  # first two dimensions must be equal
         raise ValueError(f"array must be square, but got shape: {arr.shape}")
     elif x == img_size == y:  # no interpolation needed
-        return arr  # type: ignore
+        return arr  # pyright: ignore
     points, values = square_space(x, img_size)
     interp = RegularGridInterpolator(points, arr, method=method)
     return interp(values).astype(arr.dtype)
 
 
-def url_join(url: str, *args: str, allow_fragments: bool = True) -> str:
-    """
-    >>> from metformer.utils import url_join
-    >>> url_join('https://example.com', 'images', 'cats')
-    'https://example.com/images/cats'
-    >>> url_join('https://example.com', '/images')
-    'https://example.com/images'
-    >>> url_join('https://example.com/', 'images')
-    'https://example.com/images'
-    """
-    if not url.startswith("http"):
-        raise ValueError(f"invalid url: {url}")
-    return urllib.parse.urljoin(url, "/".join(x.strip("/") for x in args), allow_fragments=allow_fragments)
-
-    # =====================================================================================================================
-    # - repr utils
-    # =====================================================================================================================
-
-
+# =====================================================================================================================
+# - repr utils
+# =====================================================================================================================
 _array2string = functools.partial(
     np.array2string,
-    max_line_width=72,
+    max_line_width=100,
     precision=2,
     separator=" ",
     floatmode="fixed",
 )
 
 
-def indent_pair(k: str, v: Any, l_pad: int, prefix="  ") -> str:
-    if isinstance(v, np.ndarray):
-        v = _array2string(v)
-    return textwrap.indent(f"{k.rjust(l_pad)}: {v}", prefix=prefix)
+def _repr_generator(*args: tuple[str, Any]):
+    prefix = "- "
+    k, _ = zip(*args)
+    width = max(map(len, k))
+    for key, value in args:
+        key = f"{prefix}{key.rjust(width)}: "
+        if isinstance(value, np.ndarray):
+            value = _array2string(value, prefix=key)
+
+        else:
+            value = repr(value)
+        yield f"{key}{value}"
 
 
-def indent_kv(*args: tuple[str, Any], prefix="  ") -> list[str]:
-    l_pad = max(len(k) for k, _ in args)
+def join_kv(head: tuple[Hashable, Any] | str | type, *args: tuple[Hashable, Any], sep="\n") -> str:
+    if isinstance(head, tuple):
+        args = (head, *args)
+        head = ""
+    elif isinstance(head, type):
+        head = f"{head.__name__}:"
 
-    return [indent_pair(k, v, l_pad, prefix) for k, v in args]
+    text = sep.join(_repr_generator(*((str(k), v) for k, v in args)))
+    return sep.join([head, text])
 
 
 # =====================================================================================================================
 # - list utils
 # =====================================================================================================================
-def frozen_list(item: Sequence[_T1]) -> list[_T1]:
-    fl = FrozenList(item)
-    fl.freeze()
-    return fl  # type: ignore
 
 
 def arange_slice(
@@ -252,23 +302,38 @@ def arange_slice(
 
 
 # =====================================================================================================================
-# - mapping utils
-# =====================================================================================================================
-def nested_proxy(data: Mapping[str, Any]) -> types.MappingProxyType[str, Any]:
-    return types.MappingProxyType({k: nested_proxy(v) if isinstance(v, Mapping) else v for k, v in data.items()})
-
-
-# =====================================================================================================================
 # - iterable utils
 # =====================================================================================================================
-def better_iter(x: _T1 | Iterable[_T1]) -> Iterator[_T1]:
+max_len: Final[Callable[[Iterable[Sized]], int]] = lambda x: max(map(len, x))
+
+
+@overload
+def find(__func: Callable[[_T1], bool], __x: Iterable[_T1]) -> _T1:
+    ...
+
+
+@overload
+def find(__func: Callable[[_T1], bool], __x: Iterable[_T1], /, *, default: _T2) -> _T1 | _T2:
+    ...
+
+
+def find(__func: Callable[[_T1], bool], __x: Iterable[_T1], /, *, default: _T2 | NoDefault = NO_DEFAULT) -> _T1 | _T2:
+    try:
+        return next(filter(__func, __x))
+    except StopIteration as e:
+        if default is not NO_DEFAULT:
+            return default
+        raise ValueError(f"no element in {__x} satisfies {__func}") from e
+
+
+def squish_iter(x: _T1 | Iterable[_T1]) -> Iterator[_T1]:
     """
 
-    >>> list(better_iter((1,2,3,4)))
+    >>> list(squish_iter((1,2,3,4)))
     [1, 2, 3, 4]
-    >>> list(better_iter('hello'))
+    >>> list(squish_iter('hello'))
     ['hello']
-    >>> list(better_iter(['hello', 'world']))
+    >>> list(squish_iter(['hello', 'world']))
     ['hello', 'world']
     """
     if not isinstance(x, Iterable):
@@ -276,21 +341,67 @@ def better_iter(x: _T1 | Iterable[_T1]) -> Iterator[_T1]:
     return iter([x] if isinstance(x, str) else x)  # type: ignore
 
 
-def find(func: Callable[[_T1], bool], x: Iterable[_T1]) -> _T1:
-    try:
-        return next(filter(func, x))
-    except StopIteration as e:
-        raise ValueError(f"no element in {x} satisfies {func}") from e
+def squish_chain(__iterable: _T1 | Iterable[_T1], /, *args: _T1) -> itertools.chain[_T1]:
+    return itertools.chain(squish_iter(__iterable), iter(args))
 
 
-def squish_map(func: Callable[[_T1], _T2], __iterable: _T1 | Iterable[_T1], *args: _T1) -> map[_T2]:
+def squish_map(__func: Callable[[_T1], _T2], __iterable: _T1 | Iterable[_T1], /, *args: _T1) -> map[_T2]:
     """
     >>> assert list(squish_map(lambda x: x, "foo", "bar", "baz")) == ["foo", "bar", "baz"]
     >>> assert list(squish_map(str, range(3), 4, 5)) == ["0", "1", "2", "4", "5"]
     >>> assert list(squish_map("hello {}".format, (x for x in ("foo", "bar")), "spam")) == ["hello foo", "hello bar", "hello spam"]
     """
 
-    return map(func, itertools.chain(better_iter(__iterable), iter(args)))
+    return map(__func, squish_chain(__iterable, *args))
+
+
+# =====================================================================================================================
+# - mapping utils
+# =====================================================================================================================
+
+
+def nested_proxy(data: Mapping[str, Any]) -> types.MappingProxyType[str, Any]:
+    return types.MappingProxyType({k: nested_proxy(v) if isinstance(v, Mapping) else v for k, v in data.items()})
+
+
+dtype_map = types.MappingProxyType(
+    collections.defaultdict(
+        lambda: pd.api.types.pandas_dtype("object"),
+        {
+            str: pd.api.types.pandas_dtype("string[pyarrow]"),
+            datetime.datetime: pd.api.types.pandas_dtype("datetime64[ns]"),
+            datetime.date: pd.api.types.pandas_dtype("datetime64[ns]"),
+            datetime.time: pd.api.types.pandas_dtype("datetime64[ns]"),
+            datetime.timedelta: pd.api.types.pandas_dtype("timedelta64[ns]"),
+        }
+        | {x: pd.api.types.pandas_dtype(x) for x in (int, float, bool, complex, bytes, memoryview)},
+    )
+)
+
+
+def get_enum_dtype(x: enum.Enum | type[enum.Enum]) -> DtypeObj:
+    """Resolve the dtype of an enum.
+
+    Args:
+        x (type[enum.Enum]): The enum to resolve.
+
+    Returns:
+        DtypeObj: The dtype of the enum.
+    """
+    if not isinstance(x, type):
+        x = type(x)
+    keys_ = dtype_map.keys()
+    if type_ := find(lambda t: t in keys_, x.mro(), default=None):
+        return dtype_map[type_]
+
+    return pd.api.types.pandas_dtype("category")
+
+
+def get_pandas_dtype(x) -> DtypeObj:
+    if isinstance(x, enum.Enum) or (isinstance(x, type) and issubclass(x, enum.Enum)):
+        return get_enum_dtype(x)
+
+    return pd.api.types.pandas_dtype(x)
 
 
 # =====================================================================================================================
@@ -329,3 +440,17 @@ def iter_jsonl(src: StrPath) -> Iterable[Any]:
     with open(src, "r") as f:
         for line in f:
             yield json.loads(line)
+
+
+def url_join(url: str, *args: str, allow_fragments: bool = True) -> str:
+    """
+    >>> url_join('https://example.com', 'images', 'cats')
+    'https://example.com/images/cats'
+    >>> url_join('https://example.com', '/images')
+    'https://example.com/images'
+    >>> url_join('https://example.com/', 'images')
+    'https://example.com/images'
+    """
+    if not url.startswith("http"):
+        raise ValueError(f"invalid url: {url}")
+    return urllib.parse.urljoin(url, "/".join(x.strip("/") for x in args), allow_fragments=allow_fragments)

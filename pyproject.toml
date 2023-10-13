@@ -9,10 +9,10 @@ requires = ["setuptools", "wheel", "numpy>=1.23.4"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mesoformer"
+name = "mesoscaler"
 version = "0.0.1"
 requires-python = ">=3.10"
-description = "<TODO"
+description = "TODO"
 authors = [{ name = "Jason Leaver", email = "jason.leaver@us.af.mil" }]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -28,31 +28,33 @@ classifiers = [
 ]
 dependencies = [
     # -- data --
+    "numpy",
+    "xarray",
+    "zarr",
+    "dask",
     "pandas",
-    "numpy==1.25.1",
-    "polars==0.18.7",
-    "pyarrow==12.0.1",
-    "h5py==3.9.0",
-    "scipy==1.11.1",
+    "pyarrow",
+    "pyresample",
+    # "h5py==3.9.0",
+    # "scipy==1.11.1",
     # -- pytorch --
-    "torch==2.0.1",
-    "torchvision",
-    "timm",
-    "tensorboard",
-    "pytorch_lightning",
-    "torchmetrics",
-    "tqdm==4.65.0",
+    # "torch==2.0.1",
+    # "torchvision",
+    # "timm",
+    # "tensorboard",
+    # "pytorch_lightning",
+    # "torchmetrics",
+    # "tqdm==4.65.0",
     # -- typing --
     "typing_extensions==4.7.1",
     "toml",
-    "frozenlist",
+    # "frozenlist",
     # - reading grib and netcdf files
-    "xarray",
-    "netCDF4",
-    "cfgrib",
+    # "netCDF4",
+    # "cfgrib",
     # - some extraction tools
-    "requests",
-    "lxml",
+    # "requests",
+    # "lxml",
 ]
 
 [project.optional-dependencies]
@@ -63,8 +65,11 @@ dev = [
     "ruff",
     "black",
     "isort",
-    "mypy-extensions",
+    "types-tqdm",
+    "types-toml",
+    "pandas-stubs",
     "pyarrow-stubs",
+    "mypy-extensions",
 ]
 ipynb = [
     # -- ipynb --
@@ -83,9 +88,10 @@ all = [
     "black",
     "isort",
     "types-tqdm",
-    "mypy-extensions",
-    "pyarrow-stubs",
+    "types-toml",
     "pandas-stubs",
+    "pyarrow-stubs",
+    "mypy-extensions",
     # -- ipynb --
     "ipykernel",
     "ipywidgets",
@@ -103,11 +109,12 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools.package-data]
-mesoformer = ["py.typed", "*.pyi", "**/*.pyi", "static/*", "../pyproject.toml"]
+mesoscaler = ["py.typed", "*.pyi", "**/*.pyi", "static/*", "../pyproject.toml"]
 
 [tool.mypy]
 python_version = "3.10"
 platform = "linux"
+mypy_path = "src"
 warn_unused_ignores = true
 warn_redundant_casts = true
 ignore_missing_imports = true
@@ -118,8 +125,8 @@ testpaths = ["tests/"]
 
 [tool.coverage.run]
 branch = true
-source = ["src/mesoformer/"]
-omit = ["src/mesoformer/typing.py"]
+source = ["src/mesoscaler/"]
+omit = ["src/mesoscaler/typing.py"]
 
 [tool.coverage.report]
 ignore_errors = false
