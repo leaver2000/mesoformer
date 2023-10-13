@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).parent
-PROJECT_NAME = "mesoscaler"
+PROJECT_NAME = "mesoformer"
 PROJECT_DIR = ROOT / "src" / PROJECT_NAME
 
 

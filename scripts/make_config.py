@@ -2,7 +2,7 @@ import dataclasses
 import datetime
 from typing import Any, Hashable
 
-from src.mesoscaler.generic import BaseConfig
+from src.mesoformer.generic import BaseConfig
 
 
 @dataclasses.dataclass
@@ -28,7 +28,7 @@ def main():
         "URMAA 2.5km CONUS",
         "Unrestricted Mesoscale Analysis (URMA) 2.5km CONUS",
         "NOAA Real-Time Mesoscale Analysis (RTMA) / Unrestricted Mesoscale Analysis (URMA) was accessed on DATE from https://registry.opendata.aws/noaa-rtma.",
-        "mesoscaler.datasets.urma",
+        "mesoformer.datasets.urma",
         datetime.datetime(2021, 6, 4, tzinfo=datetime.timezone.utc),
         datetime.datetime(2021, 6, 4, tzinfo=datetime.timezone.utc),
         [
@@ -205,7 +205,7 @@ def main():
         },
     )
 
-    api = APIConfig("mesoscaler", "mesoscaler", [urma, era5])
+    api = APIConfig("mesoformer", "mesoformer", [urma, era5])
     api.to_disk("api.toml")
 
 
