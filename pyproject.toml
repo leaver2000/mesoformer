@@ -32,6 +32,7 @@ dependencies = [
     "numpy<=1.25.1",
     "pyarrow==12.0.1",
     "xarray",
+    "dask",
     # "h5py==3.9.0",
     # "scipy==1.11.1",
     # -- pytorch --

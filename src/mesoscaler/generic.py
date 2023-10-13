@@ -6,7 +6,7 @@ import queue
 import random
 import threading
 
-from torch.utils.data import IterableDataset
+from ._torch_data import IterableDataset  # type: ignore
 
 from .typing import (
     Any,
@@ -26,7 +26,7 @@ from .typing import (
     _T_co,
     overload,
 )
-from .utils import indent_kv, is_array_like
+from .utils import is_array_like, join_kv
 
 K = TypeVar("K")
 R = TypeVar("R")
@@ -77,8 +77,7 @@ class Data(Generic[T], abc.ABC):
         return dict(self.data)
 
     def __repr__(self) -> str:
-        data = indent_kv(*self.data)
-        return "\n".join([f"{self.__class__.__name__}:"] + data)
+        return join_kv(self.__class__.__name__, *self.data)
 
 
 class DataMapping(Mapping[HashableT, T], Data[T]):
@@ -88,7 +87,7 @@ class DataMapping(Mapping[HashableT, T], Data[T]):
 
     @property
     def data(self) -> Iterable[tuple[HashableT, T]]:
-        yield from self.items()
+        yield from self.items()  # type: ignore
 
     def __getitem__(self, key: HashableT) -> T:
         return self._data[key]
