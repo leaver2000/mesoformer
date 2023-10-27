@@ -15,8 +15,8 @@ from typing import TYPE_CHECKING, Callable, Literal, TypeAlias
 
 import torch
 import torch.nn as nn
+from mesoscaler._typing import StrPath
 
-from ..typing import StrPath
 from .utils import Block, PatchEmbed
 
 Loss: TypeAlias = torch.Tensor
