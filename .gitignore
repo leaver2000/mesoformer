@@ -166,3 +166,4 @@ cython_debug/
 .trash/
 logs/
 *.zarr/**/*
+*.pt
