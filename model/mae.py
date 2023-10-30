@@ -67,13 +67,13 @@ class MaskedAutoencoder3d(nn.Module):
 
         self.patch_embed = PatchEmbed3d(input_shape, patch_shape, in_chans, embed_dim)
         self.to_patches = einsum_transpose(
-            "BCzZyYxX->BzyxZYXC",
             (B, C, z, Pz, y, Py, x, Px),  # unsqueeze
+            "BCzZyYxX->BzyxZYXC",
             (B, grid_size, math.prod(patch_shape) * C),  # reshape
         )
         self.from_patches = einsum_transpose(
-            "BzyxZYXC->BCzZyYxX",
             (B, z, y, x, Pz, Py, Px, C),  # unsqueeze
+            "BzyxZYXC->BCzZyYxX",
             (B, C, Z, Y, X),  # reshape
         )
 

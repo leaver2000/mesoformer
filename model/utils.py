@@ -60,7 +60,9 @@ def all_equals(x: Iterable[Any], y: Iterable[Any]) -> bool:
 
 
 def einsum_transpose(
-    equation: str, unsqueeze: tuple[int, ...], output_shape: tuple[int, ...]
+    unsqueeze: tuple[int, ...],
+    equation: str,
+    output_shape: tuple[int, ...],
 ) -> Callable[[torch.Tensor], torch.Tensor]:
     x, y = equation.split("->")
     assert set(x) == set(y)
