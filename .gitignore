@@ -166,3 +166,5 @@ cython_debug/
 .trash/
 logs/
 *.zarr/**/*
+*.pt
+scratchpad.ipynb
