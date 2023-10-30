@@ -1,11 +1,9 @@
 import torch
+
 from model.mae import MaskedAutoencoder3d, MaskedAutoencoder4d
 
 
-device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
-def test_mae_3d() -> None:
+def test_mae_3d(device: torch.device) -> None:
     B = 10
     C = 5
     T = 8
@@ -27,7 +25,7 @@ def test_mae_3d() -> None:
     assert model.patch_decode(pred).shape == (B, C, T, H, W)
 
 
-def test_mae_4d() -> None:
+def test_mae_4d(device: torch.device) -> None:
     B = 10
     C = 5
     T = 8

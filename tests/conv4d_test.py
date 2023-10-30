@@ -1,6 +1,5 @@
-import torch
-from model.conv4d import Conv4d
 import itertools
+
 import model.conv4d
 
 

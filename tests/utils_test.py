@@ -1,5 +1,6 @@
 import pytest
 import torch
+
 from model.utils import get_patch_encoding_functions
 
 

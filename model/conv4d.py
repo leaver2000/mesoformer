@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 
 from .generic import GenericModule
-from .utils import Quadruple
+from .utils import Quadruple, Triple
 
 _get_dimension_size: Callable[[int, int, int, int, int], int] = (
     lambda i, k, p, d, s: (i + 2 * p - (k) - (k - 1) * (d - 1)) // s + 1
@@ -17,7 +17,15 @@ _get_dimension_size: Callable[[int, int, int, int, int], int] = (
 
 
 def _generate3d(
-    in_channels, out_channels, kernel_size, padding, dilation, weight, stride, *, times: int
+    in_channels: int,
+    out_channels: int,
+    kernel_size: Triple[int],
+    padding: Triple[int],
+    dilation: Triple[int],
+    stride: Triple[int],
+    weight: torch.Tensor,
+    *,
+    times: int,
 ) -> Iterable[nn.Conv3d]:
     for i in range(times):
         m = nn.Conv3d(
@@ -37,7 +45,6 @@ class Conv4d(GenericModule[[torch.Tensor], torch.Tensor]):
     def __init__(
         self,
         in_channels: int,
-        # batch_size: int,
         out_channels: int,
         input_shape: Quadruple[int],
         kernel_size: Quadruple[int],
@@ -47,7 +54,7 @@ class Conv4d(GenericModule[[torch.Tensor], torch.Tensor]):
         groups: int = 1,
         bias: bool = False,
         padding_mode: str = "zeros",
-    ):
+    ) -> None:
         super().__init__()
 
         if in_channels % groups != 0:
@@ -74,7 +81,6 @@ class Conv4d(GenericModule[[torch.Tensor], torch.Tensor]):
         self.stride = stride
         self.padding = padding
         self.dilation = dilation
-
         self.groups = groups
         self.padding_mode = padding_mode
 
@@ -100,8 +106,8 @@ class Conv4d(GenericModule[[torch.Tensor], torch.Tensor]):
                 kernel_size=kernel_size[1::],
                 padding=padding[1::],
                 dilation=dilation[1::],
-                weight=self.weight,
                 stride=stride[1::],
+                weight=self.weight,
                 times=kernel_size[0],
             )
         )
@@ -126,11 +132,8 @@ class Conv4d(GenericModule[[torch.Tensor], torch.Tensor]):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Define shortcut names for dimensions of input and kernel
-
         B, T = x.shape[0:3:2]
-
         out = self._get_zeros(B, device=x.device)
-
         k, p, d, s = self._dim_zero
         # Convolve each kernel frame i with each input frame j
         for i in range(k):
