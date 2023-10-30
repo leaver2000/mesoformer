@@ -229,12 +229,12 @@ class PatchEmbed3d(GenericModule[[torch.Tensor], torch.Tensor]):
     def __init__(
         self,
         in_channels: int,
+        embed_dim: int,
         input_shape: Triple[int],
         patch_shape: Triple[int],
-        embed_dim: int = 768,
     ) -> None:
         super().__init__()
-        self.input_shape = input_shape
+        self.input_shape = input_shape, "Input shape must be 3D"
         self.net = nn.Conv3d(in_channels, embed_dim, kernel_size=patch_shape, stride=patch_shape)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -257,15 +257,14 @@ class PatchEmbed4d(GenericModule[[torch.Tensor], torch.Tensor]):
 
     def __init__(
         self,
+        in_channels: int,
+        embed_dim: int,
         input_shape: Quadruple[int],
         patch_shape: Quadruple[int],
-        in_channels: int,
-        batch_size: int,
-        embed_dim: int = 768,
     ) -> None:
         super().__init__()
         self.input_shape = input_shape
-        assert len(patch_shape) == 4
+        assert len(patch_shape) == 4, "4D kernel size expected!"
         self.net = Conv4d(in_channels, embed_dim, input_shape=input_shape, kernel_size=patch_shape, stride=patch_shape)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -289,7 +288,6 @@ class PatchEmbedNd(GenericModule[[torch.Tensor], torch.Tensor]):
     @overload
     def __init__(
         self,
-        batch_size: int,
         in_channels: int,
         embed_dim: int,
         input_shape: Triple[int],
@@ -300,7 +298,6 @@ class PatchEmbedNd(GenericModule[[torch.Tensor], torch.Tensor]):
     @overload
     def __init__(
         self,
-        batch_size: int,
         in_channels: int,
         embed_dim: int,
         input_shape: Quadruple[int],
@@ -310,7 +307,6 @@ class PatchEmbedNd(GenericModule[[torch.Tensor], torch.Tensor]):
 
     def __init__(
         self,
-        batch_size: int,
         in_channels: int,
         embed_dim: int,
         input_shape: Triple[int] | Quadruple[int],

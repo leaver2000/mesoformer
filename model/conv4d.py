@@ -1,3 +1,4 @@
+"""based on https://github.com/ZhengyuLiang24/Conv4d-PyTorch/blob/main/Conv4d.py"""
 from __future__ import annotations
 
 import itertools

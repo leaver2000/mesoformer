@@ -61,7 +61,6 @@ class MaskedAutoencoder3d(GenericModule[Concatenate[torch.Tensor, P], Triple[tor
         self.pred_t_dim = pred_t_dim
         self.t_pred_patch_size = z = z * pred_t_dim // Z
         self.patch_embed = PatchEmbedNd(
-            B,
             in_channels,
             embed_dim,
             input_shape,
@@ -303,7 +302,6 @@ class MaskedAutoencoder4d(GenericModule[Concatenate[torch.Tensor, P], Triple[tor
         self.pred_t_dim = pred_t_dim
         self.t_pred_patch_size = t * pred_t_dim // T
         self.patch_embed = PatchEmbedNd(
-            batch_size,
             in_channels,
             embed_dim,
             input_shape,
