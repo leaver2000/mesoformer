@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from typing import Callable, TYPE_CHECKING
 import functools
-
+from typing import TYPE_CHECKING, Callable, overload
 
 import torch
 import torch.nn as nn
 
-from .utils import Pair, Triple, pair, all_equals
+from .conv4d import Conv4d
+from .generic import GenericModule
+from .utils import Pair, Quadruple, Triple, all_equals, pair
 
 
 def drop_path(
@@ -32,7 +33,7 @@ def drop_path(
     return x * random_tensor
 
 
-class DropPath(nn.Module):
+class DropPath(GenericModule[[torch.Tensor], torch.Tensor]):
     """Drop paths (Stochastic Depth) per sample  (when applied in main path of residual blocks)."""
 
     def __init__(self, drop_prob: float = 0.0, scale_by_keep: bool = True) -> None:
@@ -47,7 +48,7 @@ class DropPath(nn.Module):
         return f"drop_prob={round(self.drop_prob,3):0.3f}"
 
 
-class MultiLayerPerceptron(nn.Module):
+class MultiLayerPerceptron(GenericModule[[torch.Tensor], torch.Tensor]):
     """MLP as used in Vision Transformer, MLP-Mixer and related networks"""
 
     def __init__(
@@ -85,22 +86,23 @@ class MultiLayerPerceptron(nn.Module):
         return x
 
 
-class Attention(nn.Module):
+class Attention(GenericModule[[torch.Tensor], torch.Tensor]):
     if TYPE_CHECKING:
         q: Callable[[torch.Tensor], torch.Tensor]
         k: Callable[[torch.Tensor], torch.Tensor]
         v: Callable[[torch.Tensor], torch.Tensor]
+        scale: float
 
     def __init__(
         self,
         dim: int,
-        num_heads=8,
-        qkv_bias=False,
-        qk_scale=None,
-        attn_drop=0.0,
-        proj_drop=0.0,
-        input_size=(4, 14, 14),
-    ):
+        num_heads: int = 8,
+        qkv_bias: bool = False,
+        qk_scale: float | None = None,
+        attn_drop: float = 0.0,
+        proj_drop: float = 0.0,
+        input_size: Triple[int] = (4, 14, 14),
+    ) -> None:
         super().__init__()
         assert dim % num_heads == 0, "dim should be divisible by num_heads"
         self.num_heads = num_heads
@@ -137,7 +139,7 @@ class Attention(nn.Module):
 # =====================================================================================================================
 #
 # =====================================================================================================================
-class Block(nn.Module):
+class Block(GenericModule[[torch.Tensor], torch.Tensor]):
     """
     Transformer Block with specified Attention function
     """
@@ -216,18 +218,24 @@ def block_list(
 # =====================================================================================================================
 #
 # =====================================================================================================================
-class PatchEmbed3d(nn.Module):
+
+
+class PatchEmbed3d(GenericModule[[torch.Tensor], torch.Tensor]):
     """Image to Patch Embedding"""
 
     if TYPE_CHECKING:
-        proj: Callable[[torch.Tensor], torch.Tensor]
+        net: Callable[[torch.Tensor], torch.Tensor]
 
     def __init__(
-        self, input_shape: Triple[int], patch_shape: Triple[int], in_chans: int, embed_dim: int = 768
+        self,
+        in_channels: int,
+        input_shape: Triple[int],
+        patch_shape: Triple[int],
+        embed_dim: int = 768,
     ) -> None:
         super().__init__()
         self.input_shape = input_shape
-        self.proj = nn.Conv3d(in_chans, embed_dim, kernel_size=patch_shape, stride=patch_shape)
+        self.net = nn.Conv3d(in_channels, embed_dim, kernel_size=patch_shape, stride=patch_shape)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -239,8 +247,99 @@ class PatchEmbed3d(nn.Module):
         Returns:
             torch.Tensor: Output tensor of shape (batch_size, time_steps, height*width, channels).
         """
-        if not all_equals(x.shape[-3:], self.input_shape):
+        if not all_equals(x.shape[2:], self.input_shape):
             raise ValueError(f"Input image size ({x.shape}) doesn't match model ({self.input_shape}).")
-        x = self.proj(x).flatten(3)
-        x = torch.einsum("bczs->bzsc", x)  # [N, T, H*W, C]
-        return x
+        return self.net(x).flatten(3).moveaxis(1, -1)
+
+
+class PatchEmbed4d(GenericModule[[torch.Tensor], torch.Tensor]):
+    """Image to Patch Embedding"""
+
+    def __init__(
+        self,
+        input_shape: Quadruple[int],
+        patch_shape: Quadruple[int],
+        in_channels: int,
+        batch_size: int,
+        embed_dim: int = 768,
+    ) -> None:
+        super().__init__()
+        self.input_shape = input_shape
+        assert len(patch_shape) == 4
+        self.net = Conv4d(in_channels, embed_dim, input_shape=input_shape, kernel_size=patch_shape, stride=patch_shape)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of the layer.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch_size, channels, time_steps, height, width).
+
+        Returns:
+            torch.Tensor: Output tensor of shape (batch_size, time_steps, height*width, channels).
+        """
+
+        if not all_equals(x.shape[2:], self.input_shape):
+            raise ValueError(f"Input image size ({x.shape}) doesn't match model ({self.input_shape}).")
+
+        return self.net(x).flatten(3).moveaxis(1, -1)
+
+
+class PatchEmbedNd(GenericModule[[torch.Tensor], torch.Tensor]):
+    @overload
+    def __init__(
+        self,
+        batch_size: int,
+        in_channels: int,
+        embed_dim: int,
+        input_shape: Triple[int],
+        patch_shape: Triple[int],
+    ) -> None:
+        ...
+
+    @overload
+    def __init__(
+        self,
+        batch_size: int,
+        in_channels: int,
+        embed_dim: int,
+        input_shape: Quadruple[int],
+        patch_shape: Quadruple[int],
+    ) -> None:
+        ...
+
+    def __init__(
+        self,
+        batch_size: int,
+        in_channels: int,
+        embed_dim: int,
+        input_shape: Triple[int] | Quadruple[int],
+        patch_shape: Triple[int] | Quadruple[int],
+    ) -> None:
+        super().__init__()
+        self.input_shape = input_shape
+
+        if len(input_shape) == 3 and len(patch_shape) == 3:
+            self.net = nn.Conv3d(in_channels, embed_dim, kernel_size=patch_shape, stride=patch_shape)
+        elif len(input_shape) == 4 and len(patch_shape) == 4:
+            self.net = Conv4d(
+                in_channels, embed_dim, input_shape=input_shape, kernel_size=patch_shape, stride=patch_shape
+            )
+        else:
+            raise ValueError(f"Input shape {input_shape} and patch shape {patch_shape} must have same length")
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of the layer.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch_size, channels, time_steps, height, width).
+
+        Returns:
+            torch.Tensor: Output tensor of shape (batch_size, time_steps, height*width, channels).
+        """
+
+        if not all_equals(x.shape[2:], self.input_shape):
+            raise ValueError(f"Input image size ({x.shape}) doesn't match model ({self.input_shape}).")
+
+        return self.net(x).flatten(3).moveaxis(1, -1)

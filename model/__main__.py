@@ -1,31 +1,26 @@
+import random
 import sys
 import typing
 
+import mesoscaler as ms
+import numpy as np
 import torch
 import torch.nn as nn
-import mesoscaler as ms
-
-
-from torch.utils.data import IterableDataset, DataLoader
-from mesoscaler._typing import Array, Nv, Nt, Nz, Ny, Nx
-import numpy as np
-import random
-
+from mesoscaler._typing import Array, Nt, Nv, Nx, Ny, Nz
 from mesoscaler.enums import (
-    # - ERA5
     GEOPOTENTIAL,
     SPECIFIC_HUMIDITY,
-    TEMPERATURE,
-    U_COMPONENT_OF_WIND,
-    V_COMPONENT_OF_WIND,
-    # - URMA
-    SURFACE_PRESSURE,
-    TEMPERATURE_2M,
     SPECIFIC_HUMIDITY_2M,
-    U_WIND_COMPONENT_10M,
-    V_WIND_COMPONENT_10M,
     SURFACE_PRESSURE,
+    TEMPERATURE,
+    TEMPERATURE_2M,
+    U_COMPONENT_OF_WIND,
+    U_WIND_COMPONENT_10M,
+    V_COMPONENT_OF_WIND,
+    V_WIND_COMPONENT_10M,
 )
+from torch.utils.data import DataLoader, IterableDataset
+
 from .mae import MaskedAutoencoder3d
 
 era5_dvars = [
@@ -80,48 +75,63 @@ def add_weight_decay(model: nn.Module, weight_decay=1e-5, skip_list=(), bias_wd=
     ]
 
 
-def get_grad_norm_(parameters: list[torch.Tensor] | torch.Tensor, norm_type: float = 2.0) -> torch.Tensor:
+def normalized_gradient(
+    parameters: typing.Iterable[torch.Tensor] | torch.Tensor,
+    norm_type: float = 2.0,
+    device: torch.device | None = None,
+) -> torch.Tensor:
+    norm_type = float(norm_type)
     if isinstance(parameters, torch.Tensor):
         parameters = [parameters]
-    parameters = [p for p in parameters if p.grad is not None]
-    norm_type = float(norm_type)
-    if len(parameters) == 0:
+    gradients = [p.grad for p in parameters if p.grad is not None]
+
+    if len(gradients) == 0:
         return torch.tensor(0.0)
-    device = parameters[0].grad.device
+    if device is None:
+        device = gradients[0].device
+
     if norm_type == torch.inf:
-        total_norm = max(p.grad.detach().abs().max().to(device) for p in parameters)
-    else:
-        total_norm = torch.norm(
-            torch.stack([torch.norm(p.grad.detach(), norm_type).to(device) for p in parameters]),
-            norm_type,
+        # return max(grad.detach().abs().max().to(device) for grad in gradients)
+        return torch.max(
+            torch.stack([torch.max(grad.detach().abs()).to(device) for grad in gradients]),
+            # dim=0,
         )
-    return total_norm
+
+    return torch.norm(
+        torch.stack([torch.norm(grad.detach(), norm_type).to(device) for grad in gradients]),
+        norm_type,
+    )
 
 
 class NativeScalerWithGradNormCount:
     state_dict_key = "amp_scaler"
 
-    def __init__(self, fp32=False):
+    def __init__(
+        self, fp32: bool = False, device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    ):
         self._scaler = torch.cuda.amp.GradScaler(enabled=not fp32)
+        self._device = device
 
     def __call__(
         self,
         loss: torch.Tensor,
         optimizer,
         clip_grad=None,
-        parameters=None,
-        create_graph=False,
-        update_grad=True,
-    ):
+        parameters: typing.Iterable[torch.Tensor] | torch.Tensor | None = None,
+        create_graph: bool = False,
+        update_grad: bool = True,
+    ) -> torch.Tensor | None:
         typing.cast(torch.Tensor, self._scaler.scale(loss)).backward(create_graph=create_graph)
-        if update_grad:
+        if parameters is None:
+            norm = None
+        elif update_grad and clip_grad is not None:
             if clip_grad is not None:
                 assert parameters is not None
-                self._scaler.unscale_(optimizer)  # unscale the gradients of optimizer's assigned params in-place
+                self._scaler.unscale_(optimizer)  # un-scale the gradients of optimizer's assigned params in-place
                 norm = torch.nn.utils.clip_grad_norm_(parameters, clip_grad)
             else:
                 self._scaler.unscale_(optimizer)
-                norm = get_grad_norm_(parameters)
+                norm = normalized_gradient(parameters)
             self._scaler.step(optimizer)
             self._scaler.update()
         else:
@@ -156,9 +166,7 @@ def main(
     dy = int(height * distance_ratio)
 
     scale = ms.Mesoscale(dx, dy, levels=levels, rate=12)
-    model = MaskedAutoencoder3d(
-        input_shape, patch_shape, batch_size=batch_size, in_chans=CHANNELS, embed_dim=768, decoder_embed_dim=768
-    )
+    model = MaskedAutoencoder3d(batch_size, CHANNELS, input_shape, patch_shape, embed_dim=768, decoder_embed_dim=768)
 
     model.train(True)
     model.to(device)
