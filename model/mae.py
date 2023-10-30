@@ -1,3 +1,4 @@
+"""based onhttps://github.com/facebookresearch/mae_st/blob/main/models_mae.py"""
 from __future__ import annotations
 
 import math
@@ -15,8 +16,6 @@ P = ParamSpec("P")
 
 
 class MaskedAutoencoder3d(GenericModule[Concatenate[torch.Tensor, P], Triple[torch.Tensor]]):
-    """Masked Autoencoder with VisionTransformer backbone"""
-
     def __init__(
         self,
         batch_size: int,
@@ -34,9 +33,6 @@ class MaskedAutoencoder3d(GenericModule[Concatenate[torch.Tensor, P], Triple[tor
         norm_layer: Callable[..., nn.Module] = nn.LayerNorm,
         norm_pix_loss: bool = False,
         no_qkv_bias: bool = False,
-        # sep_pos_embed: bool = False,
-        # trunc_init: bool = False,
-        # cls_embed: bool = False,
         pred_t_dim: int | None = None,
     ) -> None:
         super().__init__()
@@ -258,8 +254,6 @@ class MaskedAutoencoder3d(GenericModule[Concatenate[torch.Tensor, P], Triple[tor
 
 
 class MaskedAutoencoder4d(GenericModule[Concatenate[torch.Tensor, P], Triple[torch.Tensor]]):
-    """Masked Autoencoder with VisionTransformer backbone"""
-
     def __init__(
         self,
         batch_size: int,
