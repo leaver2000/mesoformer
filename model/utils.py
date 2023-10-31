@@ -4,21 +4,22 @@ from __future__ import annotations
 
 import math
 import string
-from typing import TYPE_CHECKING, Any, Callable, Iterable, TypeAlias, TypeVar
+import typing
+from typing import Any, Callable, Iterable, TypeAlias, TypeVar
 
 import torch
 
 from . import reduce
 
 _T = TypeVar("_T", bound=Any)
-
+DictStrAny: TypeAlias = dict[str, Any]
 Single: TypeAlias = tuple[_T]
 Pair: TypeAlias = tuple[_T, _T]
 Triple: TypeAlias = tuple[_T, _T, _T]
 Quadruple: TypeAlias = tuple[_T, _T, _T, _T]
 
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
 
     def single(x: _T | Single[_T]) -> _T:
         ...
@@ -135,3 +136,93 @@ def get_patch_encoding_functions(
         (batch_size, in_chans, *input_shape),
     )
     return patch, unpatch
+
+
+# =====================================================================================================================
+def normalized_gradient(
+    parameters: Iterable[torch.Tensor] | torch.Tensor,
+    norm_type: float = 2.0,
+    device: torch.device | None = None,
+) -> torch.Tensor:
+    norm_type = float(norm_type)
+    if isinstance(parameters, torch.Tensor):
+        parameters = [parameters]
+    gradients = [p.grad for p in parameters if p.grad is not None]
+
+    if len(gradients) == 0:
+        return torch.tensor(0.0)
+    if device is None:
+        device = gradients[0].device
+
+    if norm_type == torch.inf:
+        # return max(grad.detach().abs().max().to(device) for grad in gradients)
+        return torch.max(
+            torch.stack([torch.max(grad.detach().abs()).to(device) for grad in gradients]),
+            # dim=0,
+        )
+
+    return torch.norm(
+        torch.stack([torch.norm(grad.detach(), norm_type).to(device) for grad in gradients]),
+        norm_type,
+    )
+
+
+class NativeScalerWithGradNormCount:
+    state_dict_key = "amp_scaler"
+
+    def __init__(
+        self, fp32: bool = False, device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    ):
+        self._scaler = torch.cuda.amp.GradScaler(enabled=not fp32)
+        self._device = device
+
+    def __call__(
+        self,
+        loss: torch.Tensor,
+        optimizer,
+        clip_grad=None,
+        parameters: Iterable[torch.Tensor] | torch.Tensor | None = None,
+        create_graph: bool = False,
+        update_grad: bool = True,
+    ) -> torch.Tensor | None:
+        typing.cast(torch.Tensor, self._scaler.scale(loss)).backward(create_graph=create_graph)
+        if parameters is None:
+            norm = None
+        elif update_grad and clip_grad is not None:
+            if clip_grad is not None:
+                assert parameters is not None
+                self._scaler.unscale_(optimizer)  # un-scale the gradients of optimizer's assigned params in-place
+                norm = torch.nn.utils.clip_grad_norm_(parameters, clip_grad)
+            else:
+                self._scaler.unscale_(optimizer)
+                norm = normalized_gradient(parameters)
+            self._scaler.step(optimizer)
+            self._scaler.update()
+        else:
+            norm = None
+        return norm
+
+    def state_dict(self) -> dict[str, typing.Any]:
+        return self._scaler.state_dict()
+
+    def load_state_dict(self, state_dict: dict[str, typing.Any]) -> None:
+        self._scaler.load_state_dict(state_dict)
+
+
+# =====================================================================================================================
+def add_weight_decay(
+    model: torch.nn.Module, weight_decay: float = 1e-5, skip_list=(), bias_wd=False
+) -> list[dict[str, Any]]:
+    decay = []
+    no_decay = []
+    for name, param in model.named_parameters():
+        if not param.requires_grad:
+            continue  # frozen weights
+        if (not bias_wd) and len(param.shape) == 1 or name.endswith(".bias") or name in skip_list:
+            no_decay.append(param)
+        else:
+            decay.append(param)
+    return [
+        {"params": no_decay, "weight_decay": 0.0},
+        {"params": decay, "weight_decay": weight_decay},
+    ]

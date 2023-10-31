@@ -8,14 +8,14 @@ import torch
 import torch.nn as nn
 
 from . import reduce
-from .generic import GenericModule
+from .generic import GenericModule, IOModule
 from .layers import PatchEmbedNd, block_list
-from .utils import Quadruple, Triple, get_patch_encoding_functions
+from .utils import DictStrAny, Quadruple, Triple, get_patch_encoding_functions
 
-P = ParamSpec("P")
+_P = ParamSpec("_P")
 
 
-class MaskedAutoencoder3d(GenericModule[Concatenate[torch.Tensor, P], Triple[torch.Tensor]]):
+class MaskedAutoencoder3d(GenericModule[Concatenate[torch.Tensor, _P], Triple[torch.Tensor]]):
     def __init__(
         self,
         batch_size: int,
@@ -50,7 +50,6 @@ class MaskedAutoencoder3d(GenericModule[Concatenate[torch.Tensor, P], Triple[tor
         # - shape info -
         self.grid_shape = z, y, x = Z // Pz, Y // Py, X // Px
         self.grid_size = grid_size = z * y * x
-
         self.output_shape = B, C, Z, Y, X
 
         #  - patch embedding -
@@ -253,7 +252,26 @@ class MaskedAutoencoder3d(GenericModule[Concatenate[torch.Tensor, P], Triple[tor
         return loss, pred, mask
 
 
-class MaskedAutoencoder4d(GenericModule[Concatenate[torch.Tensor, P], Triple[torch.Tensor]]):
+class MaskedAutoencoder4d(IOModule[Concatenate[torch.Tensor, _P], Triple[torch.Tensor]]):
+    @property
+    def _constructor_kwargs(self) -> DictStrAny:
+        return {
+            "batch_size": self.batch_size,
+            "in_channels": self.in_channels,
+            "input_shape": self.input_shape,
+            "patch_shape": self.patch_shape,
+            "embed_dim": self.embed_dim,
+            "depth": self.depth,
+            "num_heads": self.num_heads,
+            "decoder_embed_dim": self.decoder_embed_dim,
+            "decoder_depth": self.decoder_depth,
+            "decoder_num_heads": self.decoder_num_heads,
+            "mlp_ratio": self.mlp_ratio,
+            "norm_pix_loss": self.norm_pix_loss,
+            "no_qkv_bias": self.no_qkv_bias,
+            "pred_t_dim": self.pred_t_dim,
+        }
+
     def __init__(
         self,
         batch_size: int,
@@ -268,18 +286,26 @@ class MaskedAutoencoder4d(GenericModule[Concatenate[torch.Tensor, P], Triple[tor
         decoder_depth: int = 8,
         decoder_num_heads: int = 16,
         mlp_ratio: float = 4.0,
-        norm_layer: Callable[..., nn.Module] = nn.LayerNorm,
         norm_pix_loss: bool = False,
         no_qkv_bias: bool = False,
         pred_t_dim: int | None = None,
     ) -> None:
         super().__init__()
-        B, C = batch_size, in_channels
-        T, Z, Y, X = input_shape
-
-        if pred_t_dim is None:
-            # predict just the last frame
-            pred_t_dim = T
+        # - set constructor arguments -
+        self.batch_size = B = batch_size
+        self.in_channels = C = in_channels
+        self.input_shape = T, Z, Y, X = input_shape
+        self.patch_shape = patch_shape
+        self.embed_dim = embed_dim
+        self.depth = depth
+        self.num_heads = num_heads
+        self.decoder_embed_dim = decoder_embed_dim
+        self.decoder_depth = decoder_depth
+        self.decoder_num_heads = decoder_num_heads
+        self.mlp_ratio = mlp_ratio
+        self.norm_pix_loss = norm_pix_loss
+        self.no_qkv_bias = no_qkv_bias
+        self.pred_t_dim = pred_t_dim = pred_t_dim if pred_t_dim is not None else T
 
         # - sanity check -
         for i, p in zip(input_shape, patch_shape):
@@ -289,23 +315,13 @@ class MaskedAutoencoder4d(GenericModule[Concatenate[torch.Tensor, P], Triple[tor
         # - shape info -
         self.grid_shape = t, z, y, x = tuple(reduce.floordiv(input_shape, patch_shape))
         self.grid_size = grid_size = math.prod(self.grid_shape)
-
         self.output_shape = B, C, T, Z, Y, X
 
         #  - patch embedding -
-        self.pred_t_dim = pred_t_dim
-        self.t_pred_patch_size = t * pred_t_dim // T
-        self.patch_embed = PatchEmbedNd(
-            in_channels,
-            embed_dim,
-            input_shape,
-            patch_shape,
-        )
+        self.t_pred_patch_size = t * self.pred_t_dim // T
+        self.patch_embed = PatchEmbedNd(in_channels, embed_dim, input_shape, patch_shape)
         self.patch_encode, self.patch_decode = get_patch_encoding_functions(
-            batch_size,
-            in_channels,
-            input_shape,
-            patch_shape,
+            batch_size, in_channels, input_shape, patch_shape
         )
 
         self.pos_embed = nn.Parameter(torch.zeros(1, grid_size, embed_dim))
@@ -316,10 +332,10 @@ class MaskedAutoencoder4d(GenericModule[Concatenate[torch.Tensor, P], Triple[tor
             mlp_ratio,
             qkv_bias=not no_qkv_bias,
             qk_scale=None,
-            norm_layer=norm_layer,
+            norm_layer=nn.LayerNorm,
             times=depth,
         )
-        self.norm = norm_layer(embed_dim)
+        self.norm = nn.LayerNorm(embed_dim)
         self.decoder_embed = nn.Linear(embed_dim, decoder_embed_dim, bias=True)
         self.mask_token = nn.Parameter(torch.zeros(1, 1, decoder_embed_dim))
         self.decoder_pos_embed = nn.Parameter(torch.zeros(1, grid_size, decoder_embed_dim))
@@ -330,18 +346,15 @@ class MaskedAutoencoder4d(GenericModule[Concatenate[torch.Tensor, P], Triple[tor
             mlp_ratio,
             qkv_bias=not no_qkv_bias,
             qk_scale=None,
-            norm_layer=norm_layer,
+            norm_layer=nn.LayerNorm,
             #
             times=decoder_depth,
         )
 
-        self.decoder_norm = norm_layer(decoder_embed_dim)
+        self.decoder_norm = nn.LayerNorm(decoder_embed_dim)
         self.decoder_pred = nn.Linear(decoder_embed_dim, math.prod(patch_shape) * in_channels, bias=True)
 
-        self.norm_pix_loss = norm_pix_loss
-
         self.initialize_weights()
-
         print("model initialized")
 
     def initialize_weights(self) -> None:
